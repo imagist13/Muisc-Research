@@ -1,6 +1,44 @@
 # 🎵 音乐推荐Agent
 
-一个基于AI的智能音乐推荐系统，提供个性化的音乐推荐服务。使用LangGraph构建工作流，支持自然语言交互，能够根据心情、场景、流派等多种维度推荐音乐。
+<div align="center">
+
+**一个基于AI的智能音乐推荐系统，提供个性化的音乐推荐服务**
+
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Latest-green.svg)](https://github.com/langchain-ai/langgraph)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red.svg)](https://streamlit.io/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[快速开始](#-安装和配置) • [功能特性](#-功能特性) • [使用示例](#-使用方法) • [项目架构](#-项目架构)
+
+</div>
+
+---
+
+> 🎶 **用自然语言和AI聊音乐，让推荐更懂你**  
+> 基于 LangGraph 构建的智能音乐推荐系统，支持根据心情、场景、流派等多种维度进行个性化推荐。使用硅基流动 API（支持 DeepSeek、Qwen 等模型），提供直观的 Streamlit Web 界面。
+
+### 🚀 快速体验
+
+```bash
+# 1. 克隆仓库
+git clone <your-repo-url>
+cd deep-search
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 配置 API 密钥（在 setting.json 中）
+# 4. 启动应用
+python run_music_app.py
+```
+
+### 💡 使用示例
+
+- **心情推荐**: "我现在心情很好，推荐一些开心的音乐"
+- **场景推荐**: "适合运动时听的音乐"
+- **搜索歌曲**: "搜索周杰伦的歌曲"
+- **流派推荐**: "推荐一些好听的民谣"
 
 ## ✨ 功能特性
 
