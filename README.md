@@ -54,10 +54,10 @@ pip install -r requirements.txt
 创建 `.env` 文件并配置以下环境变量：
 
 ```env
-# DeepSeek API配置 (必需)
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_CHAT_MODEL=deepseek-chat
+# 硅基流动 API配置 (必需)
+SILICONFLOW_API_KEY=your_siliconflow_api_key_here
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_CHAT_MODEL=deepseek-chat
 
 # DashScope API配置 (用于嵌入，可选)
 DASH_SCOPE_API_KEY=your_dashscope_api_key_here
