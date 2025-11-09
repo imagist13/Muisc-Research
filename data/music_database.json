@@ -1,0 +1,237 @@
+[
+  {
+    "title": "晴天",
+    "artist": "周杰伦",
+    "album": "叶惠美",
+    "genre": "流行",
+    "year": 2003,
+    "duration": 270,
+    "popularity": 95
+  },
+  {
+    "title": "七里香",
+    "artist": "周杰伦",
+    "album": "七里香",
+    "genre": "流行",
+    "year": 2004,
+    "duration": 300,
+    "popularity": 92
+  },
+  {
+    "title": "告白气球",
+    "artist": "周杰伦",
+    "album": "周杰伦的床边故事",
+    "genre": "流行",
+    "year": 2016,
+    "duration": 210,
+    "popularity": 98
+  },
+  {
+    "title": "稻香",
+    "artist": "周杰伦",
+    "album": "魔杰座",
+    "genre": "流行",
+    "year": 2008,
+    "duration": 225,
+    "popularity": 90
+  },
+  {
+    "title": "海阔天空",
+    "artist": "Beyond",
+    "album": "乐与怒",
+    "genre": "摇滚",
+    "year": 1993,
+    "duration": 325,
+    "popularity": 96
+  },
+  {
+    "title": "光辉岁月",
+    "artist": "Beyond",
+    "album": "命运派对",
+    "genre": "摇滚",
+    "year": 1991,
+    "duration": 310,
+    "popularity": 94
+  },
+  {
+    "title": "真的爱你",
+    "artist": "Beyond",
+    "album": "Beyond IV",
+    "genre": "摇滚",
+    "year": 1989,
+    "duration": 270,
+    "popularity": 93
+  },
+  {
+    "title": "南山南",
+    "artist": "马頔",
+    "album": "孤岛",
+    "genre": "民谣",
+    "year": 2014,
+    "duration": 345,
+    "popularity": 88
+  },
+  {
+    "title": "成都",
+    "artist": "赵雷",
+    "album": "无法长大",
+    "genre": "民谣",
+    "year": 2016,
+    "duration": 327,
+    "popularity": 91
+  },
+  {
+    "title": "董小姐",
+    "artist": "宋冬野",
+    "album": "安和桥北",
+    "genre": "民谣",
+    "year": 2012,
+    "duration": 270,
+    "popularity": 85
+  },
+  {
+    "title": "The Nights",
+    "artist": "Avicii",
+    "album": "The Days / Nights",
+    "genre": "电子",
+    "year": 2014,
+    "duration": 178,
+    "popularity": 89
+  },
+  {
+    "title": "Wake Me Up",
+    "artist": "Avicii",
+    "album": "True",
+    "genre": "电子",
+    "year": 2013,
+    "duration": 247,
+    "popularity": 94
+  },
+  {
+    "title": "Faded",
+    "artist": "Alan Walker",
+    "album": "Faded",
+    "genre": "电子",
+    "year": 2015,
+    "duration": 212,
+    "popularity": 96
+  },
+  {
+    "title": "一路向北",
+    "artist": "周杰伦",
+    "album": "十一月的萧邦",
+    "genre": "流行说唱",
+    "year": 2005,
+    "duration": 310,
+    "popularity": 87
+  },
+  {
+    "title": "以父之名",
+    "artist": "周杰伦",
+    "album": "叶惠美",
+    "genre": "流行说唱",
+    "year": 2003,
+    "duration": 338,
+    "popularity": 90
+  },
+  {
+    "title": "匆匆那年",
+    "artist": "王菲",
+    "album": "匆匆那年 电影原声带",
+    "genre": "抒情",
+    "year": 2014,
+    "duration": 200,
+    "popularity": 86
+  },
+  {
+    "title": "红豆",
+    "artist": "王菲",
+    "album": "唱游",
+    "genre": "抒情",
+    "year": 1998,
+    "duration": 178,
+    "popularity": 88
+  },
+  {
+    "title": "小幸运",
+    "artist": "田馥甄",
+    "album": "小幸运",
+    "genre": "抒情",
+    "year": 2015,
+    "duration": 273,
+    "popularity": 92
+  },
+  {
+    "title": "赤伶",
+    "artist": "HITA",
+    "album": "赤伶",
+    "genre": "古风",
+    "year": 2020,
+    "duration": 283,
+    "popularity": 87
+  },
+  {
+    "title": "盗将行",
+    "artist": "花粥",
+    "album": "粥请客（二）",
+    "genre": "古风",
+    "year": 2017,
+    "duration": 256,
+    "popularity": 84
+  },
+  {
+    "title": "琵琶行",
+    "artist": "奇然/沈谧仁",
+    "album": "琵琶行",
+    "genre": "古风",
+    "year": 2017,
+    "duration": 321,
+    "popularity": 83
+  },
+  {
+    "title": "Fly Me to the Moon",
+    "artist": "Frank Sinatra",
+    "album": "It Might as Well Be Swing",
+    "genre": "爵士",
+    "year": 1964,
+    "duration": 148,
+    "popularity": 91
+  },
+  {
+    "title": "My Way",
+    "artist": "Frank Sinatra",
+    "album": "My Way",
+    "genre": "爵士",
+    "year": 1969,
+    "duration": 275,
+    "popularity": 93
+  },
+  {
+    "title": "Hotel California",
+    "artist": "Eagles",
+    "album": "Hotel California",
+    "genre": "摇滚",
+    "year": 1977,
+    "duration": 391,
+    "popularity": 97
+  },
+  {
+    "title": "Bohemian Rhapsody",
+    "artist": "Queen",
+    "album": "A Night at the Opera",
+    "genre": "摇滚",
+    "year": 1975,
+    "duration": 354,
+    "popularity": 98
+  },
+  {
+    "title": "Imagine",
+    "artist": "John Lennon",
+    "album": "Imagine",
+    "genre": "流行",
+    "year": 1971,
+    "duration": 183,
+    "popularity": 96
+  }
+]
+
