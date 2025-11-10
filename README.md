@@ -73,8 +73,15 @@ APP_NAME=DeepSearch Quickstart
 ```bash
 python angent.py
 ```
+
+对于音乐推荐应用，运行：
+
 ```bash
-streamlit run streamlit_app.py
+# 方式1: 使用启动脚本（推荐）
+python run_music_app.py
+
+# 方式2: 直接运行Streamlit应用
+streamlit run music_app.py
 ```
 
 ## 使用方法

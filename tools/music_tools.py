@@ -10,6 +10,14 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
+
+# 在导入其他模块之前加载配置
+try:
+    from config.settings_loader import load_and_setup_settings
+    load_and_setup_settings()
+except Exception as e:
+    print(f"警告: 无法从 setting.json 加载配置: {e}")
+
 from config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -296,7 +304,7 @@ class MusicSearchTool:
         limit: int = 10
     ) -> List[Song]:
         """
-        搜索歌曲（优先使用 Spotify API，失败则回退到本地数据库）
+        搜索歌曲（使用 Spotify API via MCP）
         
         Args:
             query: 搜索关键词（歌曲名或艺术家）
@@ -309,46 +317,21 @@ class MusicSearchTool:
         try:
             logger.info(f"搜索音乐: query='{query}', genre='{genre}', limit={limit}")
             
-            # 优先使用 Spotify API 搜索
-            try:
-                spotify_results = await self.mcp_adapter.search_tracks(query, limit=limit * 2)
-                
-                if spotify_results:
-                    # 如果指定了流派，进行过滤（注意：Spotify 不直接提供流派，这里只能基于其他信息过滤）
-                    if genre:
-                        # 由于 Spotify 不直接提供流派，这里先不过滤，返回所有结果
-                        # 未来可以通过艺术家信息获取流派
-                        pass
-                    
-                    logger.info(f"从 Spotify 找到 {len(spotify_results)} 首歌曲")
-                    return spotify_results[:limit]
-            except Exception as e:
-                logger.warning(f"Spotify 搜索失败，回退到本地数据库: {str(e)}")
+            # 使用 Spotify API 搜索（通过 MCP）
+            spotify_results = await self.mcp_adapter.search_tracks(query, limit=limit * 2)
             
-            # 如果 Spotify 搜索失败，回退到本地数据库
-            logger.info("使用本地数据库搜索")
-            results = []
-            query_lower = query.lower()
-            
-            for song in self.music_db:
-                # 检查是否匹配搜索词
-                if (query_lower in song.title.lower() or 
-                    query_lower in song.artist.lower() or
-                    (song.album and query_lower in song.album.lower())):
-                    
-                    # 如果指定了流派，进行过滤
-                    if genre is None or (song.genre and genre.lower() in song.genre.lower()):
-                        results.append(song)
-            
-            # 按流行度排序
-            results.sort(key=lambda x: x.popularity or 0, reverse=True)
-            
-            logger.info(f"从本地数据库找到 {len(results)} 首歌曲")
-            return results[:limit]
+            if spotify_results:
+                # 如果指定了流派，进行过滤（注意：Spotify 不直接提供流派，这里先不过滤，返回所有结果）
+                # 未来可以通过艺术家信息获取流派
+                logger.info(f"从 Spotify 找到 {len(spotify_results)} 首歌曲")
+                return spotify_results[:limit]
+            else:
+                logger.warning(f"Spotify 搜索未返回结果，请检查 MCP 配置")
+                return []
             
         except Exception as e:
-            logger.error(f"搜索歌曲失败: {str(e)}")
-            return []
+            logger.error(f"搜索歌曲失败: {str(e)}", exc_info=True)
+            raise  # 抛出异常，不使用本地数据库
     
     async def get_songs_by_genre(self, genre: str, limit: int = 10) -> List[Song]:
         """
@@ -560,67 +543,25 @@ class MusicRecommenderEngine:
                 spotify_genres = ["pop"]  # 默认流派
             
             # 使用 Spotify 推荐 API
-            try:
-                songs = await self.mcp_adapter.get_recommendations(
-                    seed_genres=spotify_genres[:5],
-                    limit=limit
-                )
-                
-                if songs:
-                    recommendations = []
-                    for song in songs:
-                        reason = f"这首歌曲很适合你现在的{mood}心情"
-                        recommendations.append(MusicRecommendation(
-                            song=song,
-                            reason=reason,
-                            similarity_score=0.85
-                        ))
-                    
-                    logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
-                    return recommendations
-            except Exception as e:
-                logger.warning(f"Spotify 推荐失败，回退到本地推荐: {str(e)}")
+            songs = await self.mcp_adapter.get_recommendations(
+                seed_genres=spotify_genres[:5],
+                limit=limit
+            )
             
-            # 回退到本地推荐（使用原来的逻辑）
-            mood_genre_map_cn = {
-                "开心": ["流行", "电子"],
-                "快乐": ["流行", "电子"],
-                "悲伤": ["抒情", "民谣"],
-                "伤心": ["抒情", "民谣"],
-                "放松": ["民谣", "爵士"],
-                "舒缓": ["民谣", "爵士"],
-                "激动": ["摇滚", "电子"],
-                "兴奋": ["摇滚", "电子"],
-                "怀旧": ["经典", "流行"],
-                "平静": ["古风", "民谣"],
-                "浪漫": ["抒情", "流行"],
-            }
-            
-            genres = []
-            for key, value in mood_genre_map_cn.items():
-                if key in mood.lower() or mood.lower() in key:
-                    genres.extend(value)
-            
-            if not genres:
-                genres = ["流行"]
-            
-            all_songs = []
-            for genre in genres:
-                songs = await self.search_tool.get_songs_by_genre(genre, limit=10)
-                all_songs.extend(songs)
-            
-            unique_songs = list({song.title: song for song in all_songs}.values())
+            if not songs:
+                logger.warning(f"Spotify 推荐未返回结果，请检查 MCP 配置")
+                return []
             
             recommendations = []
-            for song in unique_songs[:limit]:
-                reason = f"这首{song.genre or '音乐'}很适合你现在的{mood}心情"
+            for song in songs:
+                reason = f"这首歌曲很适合你现在的{mood}心情"
                 recommendations.append(MusicRecommendation(
                     song=song,
                     reason=reason,
                     similarity_score=0.85
                 ))
             
-            logger.info(f"生成了 {len(recommendations)} 条推荐")
+            logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
             return recommendations
             
         except Exception as e:
@@ -646,47 +587,23 @@ class MusicRecommenderEngine:
             logger.info(f"根据喜欢的歌曲推荐: {len(favorite_songs)} 首歌")
             
             # 使用 Spotify 推荐 API
-            try:
-                # 将喜欢的歌曲转换为 Spotify 推荐格式
-                seed_tracks = [
-                    {"song_name": fav.get("title", ""), "artist_name": fav.get("artist", "")}
-                    for fav in favorite_songs[:5]  # Spotify 最多支持5个种子
-                ]
-                
-                songs = await self.mcp_adapter.get_recommendations_by_names(
-                    seed_track_names=seed_tracks,
-                    limit=limit
-                )
-                
-                if songs:
-                    recommendations = []
-                    for song in songs:
-                        reason = f"因为你喜欢类似风格的歌曲，这首{song.artist}的作品可能也会打动你"
-                        recommendations.append(MusicRecommendation(
-                            song=song,
-                            reason=reason,
-                            similarity_score=0.9
-                        ))
-                    
-                    logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
-                    return recommendations
-            except Exception as e:
-                logger.warning(f"Spotify 推荐失败，回退到本地推荐: {str(e)}")
+            # 将喜欢的歌曲转换为 Spotify 推荐格式
+            seed_tracks = [
+                {"song_name": fav.get("title", ""), "artist_name": fav.get("artist", "")}
+                for fav in favorite_songs[:5]  # Spotify 最多支持5个种子
+            ]
             
-            # 回退到本地推荐
-            all_similar = []
-            for fav in favorite_songs:
-                similar = await self.search_tool.get_similar_songs(
-                    fav.get("title", ""),
-                    fav.get("artist", ""),
-                    limit=3
-                )
-                all_similar.extend(similar)
+            songs = await self.mcp_adapter.get_recommendations_by_names(
+                seed_track_names=seed_tracks,
+                limit=limit
+            )
             
-            unique_songs = list({song.title: song for song in all_similar}.values())
+            if not songs:
+                logger.warning(f"Spotify 推荐未返回结果，请检查 MCP 配置")
+                return []
             
             recommendations = []
-            for song in unique_songs[:limit]:
+            for song in songs:
                 reason = f"因为你喜欢类似风格的歌曲，这首{song.artist}的作品可能也会打动你"
                 recommendations.append(MusicRecommendation(
                     song=song,
@@ -694,7 +611,7 @@ class MusicRecommenderEngine:
                     similarity_score=0.9
                 ))
             
-            logger.info(f"生成了 {len(recommendations)} 条推荐")
+            logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
             return recommendations
             
         except Exception as e:
@@ -742,57 +659,17 @@ class MusicRecommenderEngine:
                 spotify_genres = ["pop"]
             
             # 使用 Spotify 推荐 API
-            try:
-                songs = await self.mcp_adapter.get_recommendations(
-                    seed_genres=spotify_genres[:5],
-                    limit=limit
-                )
-                
-                if songs:
-                    recommendations = []
-                    for song in songs:
-                        reason = f"这首歌很适合{activity}时听，节奏和氛围都很搭"
-                        recommendations.append(MusicRecommendation(
-                            song=song,
-                            reason=reason,
-                            similarity_score=0.88
-                        ))
-                    
-                    logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
-                    return recommendations
-            except Exception as e:
-                logger.warning(f"Spotify 推荐失败，回退到本地推荐: {str(e)}")
+            songs = await self.mcp_adapter.get_recommendations(
+                seed_genres=spotify_genres[:5],
+                limit=limit
+            )
             
-            # 回退到本地推荐
-            activity_genre_map_cn = {
-                "运动": ["电子", "摇滚"],
-                "健身": ["电子", "摇滚"],
-                "学习": ["古风", "爵士", "民谣"],
-                "工作": ["古风", "爵士"],
-                "开车": ["流行", "摇滚"],
-                "睡觉": ["民谣", "古风"],
-                "休息": ["民谣", "抒情"],
-                "派对": ["电子", "流行"],
-                "聚会": ["流行", "电子"],
-            }
-            
-            genres = []
-            for key, value in activity_genre_map_cn.items():
-                if key in activity.lower() or activity.lower() in key:
-                    genres.extend(value)
-            
-            if not genres:
-                genres = ["流行"]
-            
-            all_songs = []
-            for genre in genres:
-                songs = await self.search_tool.get_songs_by_genre(genre, limit=10)
-                all_songs.extend(songs)
-            
-            unique_songs = list({song.title: song for song in all_songs}.values())
+            if not songs:
+                logger.warning(f"Spotify 推荐未返回结果，请检查 MCP 配置")
+                return []
             
             recommendations = []
-            for song in unique_songs[:limit]:
+            for song in songs:
                 reason = f"这首歌很适合{activity}时听，节奏和氛围都很搭"
                 recommendations.append(MusicRecommendation(
                     song=song,
@@ -800,7 +677,7 @@ class MusicRecommenderEngine:
                     similarity_score=0.88
                 ))
             
-            logger.info(f"生成了 {len(recommendations)} 条推荐")
+            logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
             return recommendations
             
         except Exception as e:

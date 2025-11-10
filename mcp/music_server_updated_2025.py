@@ -20,7 +20,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyOAuth, SpotifyClientCredentials
 
 # Load environment variables from .env file
 load_dotenv()
@@ -40,36 +40,53 @@ import mcp.server.stdio
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("music-server")
 
-# Initialize Spotify client
-_spotify_client = None
+# Initialize Spotify clients
+_spotify_client_oauth = None
+_spotify_client_cc = None
 
-def get_spotify_client():
-    """Initialize and return authenticated Spotify client (lazy initialization)."""
-    global _spotify_client
-    if _spotify_client is None:
-        scope = "user-library-read user-top-read playlist-read-private playlist-modify-public playlist-modify-private"
-        
-        # Check if environment variables exist
-        if "SPOTIFY_CLIENT_ID" not in os.environ or "SPOTIFY_CLIENT_SECRET" not in os.environ:
-            raise RuntimeError(
-                "Spotify credentials not found. Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables."
-            )
-        
-        _spotify_client = spotipy.Spotify(auth_manager=SpotifyOAuth(
-            client_id=os.environ["SPOTIFY_CLIENT_ID"],
-            client_secret=os.environ["SPOTIFY_CLIENT_SECRET"],
-            redirect_uri="http://127.0.0.1:8888/callback",
-            scope=scope
-        ))
-    return _spotify_client
+def get_spotify_client(require_user_auth=False):
+    """
+    Initialize and return authenticated Spotify client (lazy initialization).
+    
+    Args:
+        require_user_auth: If True, uses OAuth (requires user authorization).
+                          If False, uses Client Credentials (no user auth needed).
+    """
+    global _spotify_client_oauth, _spotify_client_cc
+    
+    # Check if environment variables exist
+    if "SPOTIFY_CLIENT_ID" not in os.environ or "SPOTIFY_CLIENT_SECRET" not in os.environ:
+        raise RuntimeError(
+            "Spotify credentials not found. Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables."
+        )
+    
+    if require_user_auth:
+        # Use OAuth for user-specific operations
+        if _spotify_client_oauth is None:
+            scope = "user-library-read user-top-read playlist-read-private playlist-modify-public playlist-modify-private"
+            _spotify_client_oauth = spotipy.Spotify(auth_manager=SpotifyOAuth(
+                client_id=os.environ["SPOTIFY_CLIENT_ID"],
+                client_secret=os.environ["SPOTIFY_CLIENT_SECRET"],
+                redirect_uri="http://127.0.0.1:8888/callback",
+                scope=scope
+            ))
+        return _spotify_client_oauth
+    else:
+        # Use Client Credentials for public operations (search, recommendations, etc.)
+        if _spotify_client_cc is None:
+            _spotify_client_cc = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+                client_id=os.environ["SPOTIFY_CLIENT_ID"],
+                client_secret=os.environ["SPOTIFY_CLIENT_SECRET"]
+            ))
+        return _spotify_client_cc
 
 # Initialize MCP server
 app = Server("music-server")
 # Note: sp is now lazily initialized via get_spotify_client() when needed
 
-def _sp():
+def _sp(require_user_auth=False):
     """Helper function to get Spotify client (lazy initialization)."""
-    return get_spotify_client()
+    return get_spotify_client(require_user_auth=require_user_auth)
 
 
 @app.list_resources()
@@ -103,15 +120,18 @@ async def read_resource(uri: AnyUrl) -> str:
     uri_str = str(uri)
     
     if uri_str == "music://user/profile":
-        profile = _sp().current_user()
+        # Requires user auth
+        profile = _sp(require_user_auth=True).current_user()
         return json.dumps(profile, indent=2)
     
     elif uri_str == "music://user/top-tracks":
-        tracks = _sp().current_user_top_tracks(limit=20, time_range="medium_term")
+        # Requires user auth
+        tracks = _sp(require_user_auth=True).current_user_top_tracks(limit=20, time_range="medium_term")
         return json.dumps(tracks, indent=2)
     
     elif uri_str == "music://user/top-artists":
-        artists = _sp().current_user_top_artists(limit=20, time_range="medium_term")
+        # Requires user auth
+        artists = _sp(require_user_auth=True).current_user_top_artists(limit=20, time_range="medium_term")
         return json.dumps(artists, indent=2)
     
     else:
@@ -425,7 +445,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
             query = arguments["query"]
             limit = arguments.get("limit", 10)
             
-            results = _sp().search(q=query, type="track", limit=limit)
+            # Search doesn't require user auth - use Client Credentials
+            results = _sp(require_user_auth=False).search(q=query, type="track", limit=limit)
             tracks = results["tracks"]["items"]
             
             formatted_results = []
@@ -463,7 +484,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
 
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
 
                 if tracks:
@@ -475,7 +497,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
             artist_ids = []
             artist_lookup_errors = []
             for artist_name in seed_artists_input[:5]:
-                search_results = _sp().search(q=f"artist:{artist_name}", type="artist", limit=1)
+                # Search doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=f"artist:{artist_name}", type="artist", limit=1)
                 artists = search_results["artists"]["items"]
 
                 if artists:
@@ -494,8 +517,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                     }, indent=2)
                 )]
 
-            # Get recommendations
-            recommendations = _sp().recommendations(
+            # Get recommendations - doesn't require user auth
+            recommendations = _sp(require_user_auth=False).recommendations(
                 seed_tracks=track_ids[:5] if track_ids else None,
                 seed_artists=artist_ids[:5] if artist_ids else None,
                 seed_genres=seed_genres[:5] if seed_genres else None,
@@ -538,8 +561,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
         elif name == "analyze_playlist":
             playlist_id = arguments["playlist_id"]
 
-            # Get playlist details
-            playlist = _sp().playlist(playlist_id)
+            # Get playlist details - may require user auth if private
+            playlist = _sp(require_user_auth=True).playlist(playlist_id)
             tracks = playlist["tracks"]["items"]
 
             # Collect track info
@@ -582,11 +605,11 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
         elif name == "get_artist_info":
             artist_id = arguments["artist_id"]
             
-            # Get artist details
-            artist = _sp().artist(artist_id)
+            # Get artist details - doesn't require user auth
+            artist = _sp(require_user_auth=False).artist(artist_id)
             
-            # Get top tracks
-            top_tracks = _sp().artist_top_tracks(artist_id)
+            # Get top tracks - doesn't require user auth
+            top_tracks = _sp(require_user_auth=False).artist_top_tracks(artist_id)
             
             info = {
                 "name": artist["name"],
@@ -626,8 +649,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
                 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
                 
                 if not tracks:
@@ -692,8 +715,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
                 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
                 
                 if not tracks:
@@ -706,9 +729,9 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 for artist in track["artists"]:
                     all_artists.append(artist["name"])
                     
-                    # Get artist genres
+                    # Get artist genres - doesn't require user auth
                     try:
-                        artist_info = _sp().artist(artist["id"])
+                        artist_info = _sp(require_user_auth=False).artist(artist["id"])
                         all_genres.update(artist_info["genres"])
                     except:
                         pass
@@ -814,8 +837,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
                 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
                 
                 if not tracks:
@@ -887,8 +910,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
                 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
                 
                 if not tracks:
@@ -898,14 +921,14 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 track = tracks[0]
                 track_genres = []
                 
-                # Get genres from all artists
+                # Get genres from all artists - doesn't require user auth
                 for artist in track["artists"]:
                     artist_name_key = artist["name"]
                     
                     # Cache artist info to avoid duplicate API calls
                     if artist_name_key not in artist_genres_map:
                         try:
-                            artist_info = _sp().artist(artist["id"])
+                            artist_info = _sp(require_user_auth=False).artist(artist["id"])
                             artist_genres_map[artist_name_key] = artist_info["genres"]
                         except:
                             artist_genres_map[artist_name_key] = []
@@ -1000,12 +1023,12 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
             description = arguments.get("description", "")
             public = arguments.get("public", False)
 
-            # Get current user ID
-            user = _sp().current_user()
+            # Get current user ID - requires user auth
+            user = _sp(require_user_auth=True).current_user()
             user_id = user["id"]
 
-            # Create the playlist
-            playlist = _sp().user_playlist_create(
+            # Create the playlist - requires user auth
+            playlist = _sp(require_user_auth=True).user_playlist_create(
                 user=user_id,
                 name=playlist_name,
                 public=public,
@@ -1026,8 +1049,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
 
                 if tracks:
@@ -1040,10 +1063,10 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 else:
                     not_found.append(query)
 
-            # Add tracks to playlist in batches of 100 (Spotify limit)
-            for i in range(0, len(track_uris), 100):
-                batch = track_uris[i:i+100]
-                _sp().playlist_add_items(playlist["id"], batch)
+                # Add tracks to playlist in batches of 100 (Spotify limit) - requires user auth
+                for i in range(0, len(track_uris), 100):
+                    batch = track_uris[i:i+100]
+                    _sp(require_user_auth=True).playlist_add_items(playlist["id"], batch)
 
             result = {
                 "success": True,
@@ -1085,7 +1108,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
 
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
 
                 if not tracks:
@@ -1094,11 +1118,11 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
 
                 track = tracks[0]
 
-                # Get artist info for genres
+                # Get artist info for genres - doesn't require user auth
                 genres = []
                 for artist in track["artists"]:
                     try:
-                        artist_info = _sp().artist(artist["id"])
+                        artist_info = _sp(require_user_auth=False).artist(artist["id"])
                         genres.extend(artist_info["genres"])
                     except:
                         pass
@@ -1201,10 +1225,10 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 "balanced_selection": balanced_songs
             }
 
-            # Create playlist if name provided
+            # Create playlist if name provided - requires user auth
             if playlist_name:
-                user = _sp().current_user()
-                playlist = _sp().user_playlist_create(
+                user = _sp(require_user_auth=True).current_user()
+                playlist = _sp(require_user_auth=True).user_playlist_create(
                     user=user["id"],
                     name=playlist_name,
                     public=False,
@@ -1214,7 +1238,7 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 track_uris = [item["track"]["uri"] for item in selected_tracks]
                 for i in range(0, len(track_uris), 100):
                     batch = track_uris[i:i+100]
-                    _sp().playlist_add_items(playlist["id"], batch)
+                    _sp(require_user_auth=True).playlist_add_items(playlist["id"], batch)
 
                 result["playlist_created"] = {
                     "id": playlist["id"],
@@ -1230,9 +1254,9 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
         elif name == "compare_to_my_taste":
             songs = arguments["songs"]
 
-            # Get user's top tracks and artists
-            top_tracks = _sp().current_user_top_tracks(limit=50, time_range="medium_term")
-            top_artists = _sp().current_user_top_artists(limit=50, time_range="medium_term")
+            # Get user's top tracks and artists - requires user auth
+            top_tracks = _sp(require_user_auth=True).current_user_top_tracks(limit=50, time_range="medium_term")
+            top_artists = _sp(require_user_auth=True).current_user_top_artists(limit=50, time_range="medium_term")
 
             # Extract user's favorite artists and genres
             user_artists = set([artist["name"].lower() for artist in top_artists["items"]])
@@ -1260,8 +1284,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
 
                 if not tracks:
@@ -1277,11 +1301,11 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 # Check if artist is in user's top artists
                 is_favorite_artist = any(a.lower() in user_artists for a in track_artists)
 
-                # Get genres for this track
+                # Get genres for this track - doesn't require user auth
                 track_genres = []
                 for artist in track["artists"]:
                     try:
-                        artist_info = _sp().artist(artist["id"])
+                        artist_info = _sp(require_user_auth=False).artist(artist["id"])
                         track_genres.extend(artist_info["genres"])
                     except:
                         pass
@@ -1360,13 +1384,13 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
         elif name == "find_whats_missing":
             songs = arguments["songs"]
 
-            # Get ALL user's saved tracks (may require pagination)
+            # Get ALL user's saved tracks (may require pagination) - requires user auth
             saved_tracks_set = set()
             offset = 0
             limit = 50
 
             while True:
-                saved = _sp().current_user_saved_tracks(limit=limit, offset=offset)
+                saved = _sp(require_user_auth=True).current_user_saved_tracks(limit=limit, offset=offset)
                 if not saved["items"]:
                     break
 
@@ -1393,8 +1417,8 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
                 if artist_name:
                     query += f" artist:{artist_name}"
 
-                # Search for the song
-                search_results = _sp().search(q=query, type="track", limit=1)
+                # Search for the song - doesn't require user auth
+                search_results = _sp(require_user_auth=False).search(q=query, type="track", limit=1)
                 tracks = search_results["tracks"]["items"]
 
                 if not tracks:

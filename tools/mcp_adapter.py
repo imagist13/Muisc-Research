@@ -9,6 +9,13 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
+# 在导入其他模块之前加载配置
+try:
+    from config.settings_loader import load_and_setup_settings
+    load_and_setup_settings()
+except Exception as e:
+    print(f"警告: 无法从 setting.json 加载配置: {e}")
+
 from config.logging_config import get_logger
 from tools.music_tools import Song
 
@@ -142,8 +149,7 @@ class MCPClientAdapter:
             duration=track.get("duration_ms", 0) // 1000 if track.get("duration_ms") else None,
             popularity=track.get("popularity", 0),
             preview_url=track.get("preview_url"),
-            spotify_id=track.get("id"),
-            external_url=track.get("external_urls", {}).get("spotify") if isinstance(track.get("external_urls"), dict) else None
+            spotify_id=track.get("id")
         )
     
     async def search_tracks(self, query: str, limit: int = 10) -> List[Song]:
@@ -171,12 +177,8 @@ class MCPClientAdapter:
             
         except Exception as e:
             error_msg = str(e)
-            # 对于缺少凭证的情况，使用 WARNING 而不是 ERROR
-            if "credentials not found" in error_msg.lower() or "spotify credentials" in error_msg.lower():
-                logger.warning(f"Spotify 未配置，无法搜索: {error_msg}。将使用本地数据库。")
-            else:
-                logger.error(f"搜索歌曲失败: {error_msg}", exc_info=True)
-            return []
+            logger.error(f"搜索歌曲失败: {error_msg}", exc_info=True)
+            raise  # 抛出异常，不使用本地数据库
     
     async def get_recommendations(
         self,
@@ -186,7 +188,7 @@ class MCPClientAdapter:
         limit: int = 20
     ) -> List[Song]:
         """
-        获取 Spotify 推荐
+        使用硅基流动API获取音乐推荐
         
         Args:
             seed_tracks: 种子歌曲 ID 列表（最多5个）
@@ -208,7 +210,7 @@ class MCPClientAdapter:
             if sp is None:
                 return []
             
-            # 限制种子数量（Spotify API 要求）
+            # 限制种子数量
             seed_tracks = (seed_tracks or [])[:5]
             seed_artists = (seed_artists or [])[:5]
             seed_genres = (seed_genres or [])[:5]
@@ -218,22 +220,179 @@ class MCPClientAdapter:
                 logger.warning("没有提供种子，无法获取推荐")
                 return []
             
-            recommendations = sp.recommendations(
-                seed_tracks=seed_tracks if seed_tracks else None,
-                seed_artists=seed_artists if seed_artists else None,
-                seed_genres=seed_genres if seed_genres else None,
-                limit=min(limit, 100)  # Spotify 限制最多100
-            )
+            # 收集种子信息（歌曲名、艺术家名、流派）
+            seed_info = {
+                "songs": [],
+                "artists": [],
+                "genres": seed_genres or []
+            }
             
-            tracks = recommendations["tracks"]
-            songs = [self._spotify_track_to_song(track) for track in tracks]
+            # 获取种子歌曲信息
+            if seed_tracks:
+                logger.info(f"获取 {len(seed_tracks)} 首种子歌曲的信息...")
+                for track_id in seed_tracks:
+                    try:
+                        track_info = sp.track(track_id)
+                        if track_info and track_info.get("name"):
+                            artist_names = [a.get("name", "") for a in track_info.get("artists", [])]
+                            seed_info["songs"].append({
+                                "name": track_info.get("name"),
+                                "artist": ", ".join(artist_names) if artist_names else "Unknown"
+                            })
+                    except Exception as e:
+                        logger.debug(f"获取歌曲 {track_id} 信息失败: {e}")
+                        continue
             
-            logger.info(f"获取到 {len(songs)} 首推荐歌曲")
-            return songs
+            # 获取种子艺术家信息
+            if seed_artists:
+                logger.info(f"获取 {len(seed_artists)} 个种子艺术家的信息...")
+                for artist_id in seed_artists:
+                    try:
+                        artist_info = sp.artist(artist_id)
+                        if artist_info and artist_info.get("name"):
+                            seed_info["artists"].append(artist_info.get("name"))
+                    except Exception as e:
+                        logger.debug(f"获取艺术家 {artist_id} 信息失败: {e}")
+                        continue
+            
+            # 如果只有流派，先搜索该流派的热门歌曲作为种子
+            if not seed_info["songs"] and not seed_info["artists"] and seed_genres:
+                logger.info(f"只有流派种子，搜索流派 '{seed_genres[0]}' 的热门歌曲作为种子")
+                try:
+                    search_strategies = [
+                        f"genre:{seed_genres[0]}",
+                        seed_genres[0],
+                        f"tag:{seed_genres[0]}",
+                    ]
+                    
+                    for query in search_strategies:
+                        try:
+                            search_results = sp.search(q=query, type="track", limit=10)
+                            if search_results["tracks"]["items"]:
+                                tracks = [
+                                    track for track in search_results["tracks"]["items"]
+                                    if track.get("popularity", 0) > 0 and track.get("id")
+                                ]
+                                tracks = sorted(tracks, key=lambda x: x.get("popularity", 0), reverse=True)[:3]
+                                
+                                for track in tracks:
+                                    artist_names = [a.get("name", "") for a in track.get("artists", [])]
+                                    seed_info["songs"].append({
+                                        "name": track.get("name"),
+                                        "artist": ", ".join(artist_names) if artist_names else "Unknown"
+                                    })
+                                
+                                if seed_info["songs"]:
+                                    logger.info(f"使用查询 '{query}' 找到 {len(seed_info['songs'])} 首种子歌曲")
+                                    break
+                        except Exception as e:
+                            logger.debug(f"搜索策略 '{query}' 失败: {e}")
+                            continue
+                except Exception as e:
+                    logger.warning(f"搜索种子歌曲失败: {e}")
+            
+            # 如果仍然没有种子信息，无法获取推荐
+            if not seed_info["songs"] and not seed_info["artists"] and not seed_info["genres"]:
+                logger.error("无法获取种子信息，无法生成推荐")
+                return []
+            
+            # 使用硅基流动API生成推荐
+            logger.info("使用硅基流动API生成推荐...")
+            try:
+                from llms.siliconflow_llm import SiliconFlowLLM
+                llm = SiliconFlowLLM()
+                
+                # 构建提示词
+                system_prompt = """你是一个专业的音乐推荐专家。根据用户提供的种子信息（喜欢的歌曲、艺术家、流派），推荐相似风格的音乐。
+请返回推荐的歌曲列表，格式为JSON数组，每个推荐包含歌曲名和艺术家名。
+格式示例：
+[
+  {"song": "歌曲名1", "artist": "艺术家名1"},
+  {"song": "歌曲名2", "artist": "艺术家名2"}
+]
+只返回JSON数组，不要其他文字说明。"""
+                
+                user_prompt = f"""根据以下信息推荐 {limit} 首相似风格的音乐：
+
+"""
+                if seed_info["songs"]:
+                    user_prompt += "喜欢的歌曲：\n"
+                    for song in seed_info["songs"]:
+                        user_prompt += f"- {song['name']} by {song['artist']}\n"
+                    user_prompt += "\n"
+                
+                if seed_info["artists"]:
+                    user_prompt += f"喜欢的艺术家：{', '.join(seed_info['artists'])}\n\n"
+                
+                if seed_info["genres"]:
+                    user_prompt += f"喜欢的流派：{', '.join(seed_info['genres'])}\n\n"
+                
+                user_prompt += f"请推荐 {limit} 首相似风格的音乐，返回JSON数组格式。"
+                
+                # 调用硅基流动API
+                response_text = llm.invoke(system_prompt, user_prompt, temperature=0.8, max_tokens=2000)
+                
+                # 解析JSON响应
+                import re
+                # 尝试提取JSON数组
+                json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+                if json_match:
+                    recommendations_data = json.loads(json_match.group())
+                else:
+                    # 如果找不到JSON，尝试直接解析整个响应
+                    recommendations_data = json.loads(response_text)
+                
+                if not isinstance(recommendations_data, list):
+                    logger.error(f"硅基流动API返回格式错误: {type(recommendations_data)}")
+                    return []
+                
+                logger.info(f"硅基流动API生成了 {len(recommendations_data)} 首推荐")
+                
+            except Exception as e:
+                logger.error(f"使用硅基流动API生成推荐失败: {e}", exc_info=True)
+                return []
+            
+            # 使用Spotify搜索API查找推荐的歌曲
+            found_songs = []
+            for rec in recommendations_data[:limit * 2]:  # 搜索更多以增加找到的概率
+                try:
+                    song_name = rec.get("song") or rec.get("name") or rec.get("title")
+                    artist_name = rec.get("artist") or rec.get("artist_name")
+                    
+                    if not song_name:
+                        continue
+                    
+                    # 构建搜索查询
+                    if artist_name:
+                        query = f"track:{song_name} artist:{artist_name}"
+                    else:
+                        query = f"track:{song_name}"
+                    
+                    # 搜索歌曲
+                    search_results = sp.search(q=query, type="track", limit=3)
+                    tracks = search_results.get("tracks", {}).get("items", [])
+                    
+                    if tracks:
+                        # 选择第一个匹配的歌曲
+                        track = tracks[0]
+                        song = self._spotify_track_to_song(track)
+                        # 避免重复
+                        if song.spotify_id not in [s.spotify_id for s in found_songs]:
+                            found_songs.append(song)
+                            logger.debug(f"找到推荐歌曲: {song.name} by {song.artist}")
+                    
+                    if len(found_songs) >= limit:
+                        break
+                        
+                except Exception as e:
+                    logger.debug(f"搜索推荐歌曲失败: {e}")
+                    continue
+            
+            logger.info(f"成功找到 {len(found_songs)} 首推荐歌曲")
+            return found_songs[:limit]
             
         except Exception as e:
             error_msg = str(e)
-            # 记录其他类型的错误（非凭证问题）
             logger.error(f"获取推荐失败: {error_msg}", exc_info=True)
             return []
     
@@ -294,12 +453,8 @@ class MCPClientAdapter:
             
         except Exception as e:
             error_msg = str(e)
-            # 对于缺少凭证的情况，使用 WARNING 而不是 ERROR
-            if "credentials not found" in error_msg.lower() or "spotify credentials" in error_msg.lower():
-                logger.warning(f"Spotify 未配置，无法获取推荐: {error_msg}。将使用本地数据库。")
-            else:
-                logger.error(f"通过名称获取推荐失败: {error_msg}", exc_info=True)
-            return []
+            logger.error(f"通过名称获取推荐失败: {error_msg}", exc_info=True)
+            raise  # 抛出异常，不使用本地数据库
     
     async def get_user_top_tracks(self, limit: int = 20, time_range: str = "medium_term") -> List[Song]:
         """
