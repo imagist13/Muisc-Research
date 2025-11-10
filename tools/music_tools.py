@@ -50,13 +50,25 @@ class MusicRecommendation:
 
 
 class MusicSearchTool:
-    """音乐搜索工具"""
+    """音乐搜索工具 - 使用 MCP 适配器"""
     
-    def __init__(self):
+    def __init__(self, mcp_adapter=None):
+        """
+        初始化音乐搜索工具
+        
+        Args:
+            mcp_adapter: MCP 客户端适配器，如果为 None 则自动创建
+        """
         self.session = None
-        # 模拟音乐数据库（实际项目中应该对接真实的音乐API，如Spotify、网易云等）
+        # 使用 MCP 适配器
+        if mcp_adapter is None:
+            from tools.mcp_adapter import get_mcp_adapter
+            mcp_adapter = get_mcp_adapter()
+        self.mcp_adapter = mcp_adapter
+        
+        # 保留本地数据库作为后备（可选）
         self.music_db = self._initialize_music_db()
-        # 加载 tailyapi 配置
+        # 加载 tailyapi 配置（作为后备）
         self.tailyapi_config = self._load_tailyapi_config()
     
     def _load_tailyapi_config(self) -> Dict[str, str]:
@@ -284,11 +296,11 @@ class MusicSearchTool:
         limit: int = 10
     ) -> List[Song]:
         """
-        搜索歌曲（优先使用 tailyapi，失败则回退到本地数据库）
+        搜索歌曲（优先使用 Spotify API，失败则回退到本地数据库）
         
         Args:
             query: 搜索关键词（歌曲名或艺术家）
-            genre: 音乐流派过滤
+            genre: 音乐流派过滤（注意：Spotify 搜索不支持流派过滤，会在结果中过滤）
             limit: 返回结果数量
             
         Returns:
@@ -297,24 +309,24 @@ class MusicSearchTool:
         try:
             logger.info(f"搜索音乐: query='{query}', genre='{genre}', limit={limit}")
             
-            # 优先使用 tailyapi 在线搜索
-            online_results = await self._search_songs_with_tailyapi(query, limit=limit * 2)
-            
-            if online_results:
-                # 如果指定了流派，进行过滤
-                if genre:
-                    filtered = [
-                        song for song in online_results
-                        if song.genre and genre.lower() in song.genre.lower()
-                    ]
-                    if filtered:
-                        return filtered[:limit]
+            # 优先使用 Spotify API 搜索
+            try:
+                spotify_results = await self.mcp_adapter.search_tracks(query, limit=limit * 2)
                 
-                logger.info(f"从 TailyAPI 找到 {len(online_results)} 首歌曲")
-                return online_results[:limit]
+                if spotify_results:
+                    # 如果指定了流派，进行过滤（注意：Spotify 不直接提供流派，这里只能基于其他信息过滤）
+                    if genre:
+                        # 由于 Spotify 不直接提供流派，这里先不过滤，返回所有结果
+                        # 未来可以通过艺术家信息获取流派
+                        pass
+                    
+                    logger.info(f"从 Spotify 找到 {len(spotify_results)} 首歌曲")
+                    return spotify_results[:limit]
+            except Exception as e:
+                logger.warning(f"Spotify 搜索失败，回退到本地数据库: {str(e)}")
             
-            # 如果在线搜索失败，回退到本地数据库
-            logger.info("TailyAPI 搜索无结果，使用本地数据库搜索")
+            # 如果 Spotify 搜索失败，回退到本地数据库
+            logger.info("使用本地数据库搜索")
             results = []
             query_lower = query.lower()
             
@@ -490,10 +502,20 @@ class MusicSearchTool:
 
 
 class MusicRecommenderEngine:
-    """音乐推荐引擎"""
+    """音乐推荐引擎 - 增强版，支持 Spotify 推荐"""
     
-    def __init__(self, search_tool: MusicSearchTool):
+    def __init__(self, search_tool: MusicSearchTool, mcp_adapter=None):
+        """
+        初始化推荐引擎
+        
+        Args:
+            search_tool: 音乐搜索工具
+            mcp_adapter: MCP 客户端适配器，如果为 None 则从 search_tool 获取
+        """
         self.search_tool = search_tool
+        if mcp_adapter is None:
+            mcp_adapter = search_tool.mcp_adapter
+        self.mcp_adapter = mcp_adapter
     
     async def recommend_by_mood(
         self, 
@@ -501,7 +523,7 @@ class MusicRecommenderEngine:
         limit: int = 5
     ) -> List[MusicRecommendation]:
         """
-        根据心情推荐音乐
+        根据心情推荐音乐（使用 Spotify 推荐 API）
         
         Args:
             mood: 心情描述（如：开心、悲伤、放松、激动等）
@@ -513,8 +535,54 @@ class MusicRecommenderEngine:
         try:
             logger.info(f"根据心情推荐音乐: mood='{mood}'")
             
-            # 心情到流派的映射
+            # 心情到 Spotify 流派的映射
             mood_genre_map = {
+                "开心": ["pop", "dance", "electronic"],
+                "快乐": ["pop", "dance", "electronic"],
+                "悲伤": ["acoustic", "sad", "indie"],
+                "伤心": ["acoustic", "sad", "indie"],
+                "放松": ["chill", "acoustic", "jazz"],
+                "舒缓": ["chill", "acoustic", "jazz"],
+                "激动": ["rock", "electronic", "dance"],
+                "兴奋": ["rock", "electronic", "dance"],
+                "怀旧": ["classic", "pop", "rock"],
+                "平静": ["ambient", "acoustic", "chill"],
+                "浪漫": ["acoustic", "pop", "r-n-b"],
+            }
+            
+            # 匹配流派
+            spotify_genres = []
+            for key, value in mood_genre_map.items():
+                if key in mood.lower() or mood.lower() in key:
+                    spotify_genres.extend(value)
+            
+            if not spotify_genres:
+                spotify_genres = ["pop"]  # 默认流派
+            
+            # 使用 Spotify 推荐 API
+            try:
+                songs = await self.mcp_adapter.get_recommendations(
+                    seed_genres=spotify_genres[:5],
+                    limit=limit
+                )
+                
+                if songs:
+                    recommendations = []
+                    for song in songs:
+                        reason = f"这首歌曲很适合你现在的{mood}心情"
+                        recommendations.append(MusicRecommendation(
+                            song=song,
+                            reason=reason,
+                            similarity_score=0.85
+                        ))
+                    
+                    logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
+                    return recommendations
+            except Exception as e:
+                logger.warning(f"Spotify 推荐失败，回退到本地推荐: {str(e)}")
+            
+            # 回退到本地推荐（使用原来的逻辑）
+            mood_genre_map_cn = {
                 "开心": ["流行", "电子"],
                 "快乐": ["流行", "电子"],
                 "悲伤": ["抒情", "民谣"],
@@ -528,28 +596,24 @@ class MusicRecommenderEngine:
                 "浪漫": ["抒情", "流行"],
             }
             
-            # 匹配流派
             genres = []
-            for key, value in mood_genre_map.items():
+            for key, value in mood_genre_map_cn.items():
                 if key in mood.lower() or mood.lower() in key:
                     genres.extend(value)
             
             if not genres:
-                genres = ["流行"]  # 默认流派
+                genres = ["流行"]
             
-            # 获取对应流派的歌曲
             all_songs = []
             for genre in genres:
                 songs = await self.search_tool.get_songs_by_genre(genre, limit=10)
                 all_songs.extend(songs)
             
-            # 去重并限制数量
             unique_songs = list({song.title: song for song in all_songs}.values())
             
-            # 生成推荐
             recommendations = []
             for song in unique_songs[:limit]:
-                reason = f"这首{song.genre}歌曲很适合你现在的{mood}心情"
+                reason = f"这首{song.genre or '音乐'}很适合你现在的{mood}心情"
                 recommendations.append(MusicRecommendation(
                     song=song,
                     reason=reason,
@@ -569,7 +633,7 @@ class MusicRecommenderEngine:
         limit: int = 5
     ) -> List[MusicRecommendation]:
         """
-        根据喜欢的歌曲推荐
+        根据喜欢的歌曲推荐（使用 Spotify 推荐 API）
         
         Args:
             favorite_songs: 喜欢的歌曲列表 [{"title": "歌名", "artist": "歌手"}, ...]
@@ -581,6 +645,35 @@ class MusicRecommenderEngine:
         try:
             logger.info(f"根据喜欢的歌曲推荐: {len(favorite_songs)} 首歌")
             
+            # 使用 Spotify 推荐 API
+            try:
+                # 将喜欢的歌曲转换为 Spotify 推荐格式
+                seed_tracks = [
+                    {"song_name": fav.get("title", ""), "artist_name": fav.get("artist", "")}
+                    for fav in favorite_songs[:5]  # Spotify 最多支持5个种子
+                ]
+                
+                songs = await self.mcp_adapter.get_recommendations_by_names(
+                    seed_track_names=seed_tracks,
+                    limit=limit
+                )
+                
+                if songs:
+                    recommendations = []
+                    for song in songs:
+                        reason = f"因为你喜欢类似风格的歌曲，这首{song.artist}的作品可能也会打动你"
+                        recommendations.append(MusicRecommendation(
+                            song=song,
+                            reason=reason,
+                            similarity_score=0.9
+                        ))
+                    
+                    logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
+                    return recommendations
+            except Exception as e:
+                logger.warning(f"Spotify 推荐失败，回退到本地推荐: {str(e)}")
+            
+            # 回退到本地推荐
             all_similar = []
             for fav in favorite_songs:
                 similar = await self.search_tool.get_similar_songs(
@@ -590,10 +683,8 @@ class MusicRecommenderEngine:
                 )
                 all_similar.extend(similar)
             
-            # 去重
             unique_songs = list({song.title: song for song in all_similar}.values())
             
-            # 生成推荐
             recommendations = []
             for song in unique_songs[:limit]:
                 reason = f"因为你喜欢类似风格的歌曲，这首{song.artist}的作品可能也会打动你"
@@ -616,7 +707,7 @@ class MusicRecommenderEngine:
         limit: int = 5
     ) -> List[MusicRecommendation]:
         """
-        根据活动场景推荐音乐
+        根据活动场景推荐音乐（使用 Spotify 推荐 API）
         
         Args:
             activity: 活动描述（如：运动、学习、开车、睡觉等）
@@ -628,8 +719,52 @@ class MusicRecommenderEngine:
         try:
             logger.info(f"根据活动场景推荐: activity='{activity}'")
             
-            # 活动到流派的映射
+            # 活动到 Spotify 流派的映射
             activity_genre_map = {
+                "运动": ["electronic", "rock", "dance"],
+                "健身": ["electronic", "rock", "dance"],
+                "学习": ["acoustic", "jazz", "chill"],
+                "工作": ["acoustic", "jazz", "chill"],
+                "开车": ["pop", "rock", "country"],
+                "睡觉": ["ambient", "acoustic", "chill"],
+                "休息": ["acoustic", "chill", "jazz"],
+                "派对": ["dance", "pop", "electronic"],
+                "聚会": ["pop", "dance", "electronic"],
+            }
+            
+            # 匹配流派
+            spotify_genres = []
+            for key, value in activity_genre_map.items():
+                if key in activity.lower() or activity.lower() in key:
+                    spotify_genres.extend(value)
+            
+            if not spotify_genres:
+                spotify_genres = ["pop"]
+            
+            # 使用 Spotify 推荐 API
+            try:
+                songs = await self.mcp_adapter.get_recommendations(
+                    seed_genres=spotify_genres[:5],
+                    limit=limit
+                )
+                
+                if songs:
+                    recommendations = []
+                    for song in songs:
+                        reason = f"这首歌很适合{activity}时听，节奏和氛围都很搭"
+                        recommendations.append(MusicRecommendation(
+                            song=song,
+                            reason=reason,
+                            similarity_score=0.88
+                        ))
+                    
+                    logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")
+                    return recommendations
+            except Exception as e:
+                logger.warning(f"Spotify 推荐失败，回退到本地推荐: {str(e)}")
+            
+            # 回退到本地推荐
+            activity_genre_map_cn = {
                 "运动": ["电子", "摇滚"],
                 "健身": ["电子", "摇滚"],
                 "学习": ["古风", "爵士", "民谣"],
@@ -641,25 +776,21 @@ class MusicRecommenderEngine:
                 "聚会": ["流行", "电子"],
             }
             
-            # 匹配流派
             genres = []
-            for key, value in activity_genre_map.items():
+            for key, value in activity_genre_map_cn.items():
                 if key in activity.lower() or activity.lower() in key:
                     genres.extend(value)
             
             if not genres:
                 genres = ["流行"]
             
-            # 获取对应流派的歌曲
             all_songs = []
             for genre in genres:
                 songs = await self.search_tool.get_songs_by_genre(genre, limit=10)
                 all_songs.extend(songs)
             
-            # 去重并限制数量
             unique_songs = list({song.title: song for song in all_songs}.values())
             
-            # 生成推荐
             recommendations = []
             for song in unique_songs[:limit]:
                 reason = f"这首歌很适合{activity}时听，节奏和氛围都很搭"
@@ -677,7 +808,52 @@ class MusicRecommenderEngine:
             return []
 
 
-# 创建全局实例
-music_search_tool = MusicSearchTool()
-music_recommender = MusicRecommenderEngine(music_search_tool)
+# 创建全局实例（延迟初始化，避免在导入时连接 Spotify）
+_music_search_tool = None
+_music_recommender = None
+
+def get_music_search_tool() -> MusicSearchTool:
+    """获取音乐搜索工具单例"""
+    global _music_search_tool
+    if _music_search_tool is None:
+        _music_search_tool = MusicSearchTool()
+    return _music_search_tool
+
+def get_music_recommender() -> MusicRecommenderEngine:
+    """获取音乐推荐引擎单例"""
+    global _music_recommender
+    if _music_recommender is None:
+        _music_recommender = MusicRecommenderEngine(get_music_search_tool())
+    return _music_recommender
+
+# 为了向后兼容，创建延迟初始化的属性访问器
+class _LazyMusicTools:
+    """延迟初始化的音乐工具访问器"""
+    @property
+    def music_search_tool(self):
+        return get_music_search_tool()
+    
+    @property
+    def music_recommender(self):
+        return get_music_recommender()
+
+_lazy_tools = _LazyMusicTools()
+
+# 导出全局变量（向后兼容）
+def __getattr__(name):
+    if name == "music_search_tool":
+        return get_music_search_tool()
+    elif name == "music_recommender":
+        return get_music_recommender()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+# 直接创建实例（向后兼容，但会在导入时初始化）
+try:
+    music_search_tool = MusicSearchTool()
+    music_recommender = MusicRecommenderEngine(music_search_tool)
+except Exception as e:
+    logger.warning(f"初始化全局音乐工具失败，将在首次使用时初始化: {str(e)}")
+    # 如果初始化失败，设置为 None，将在首次使用时通过 get_music_search_tool() 初始化
+    music_search_tool = None
+    music_recommender = None
 

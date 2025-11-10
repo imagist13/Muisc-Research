@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "music-server": {
+      "command": "python",
+      "args": [
+        "/absolute/path/to/your/music_server_updated_2025.py"
+      ],
+      "env": {
+        "SPOTIFY_CLIENT_ID": "your_client_id_here",
+        "SPOTIFY_CLIENT_SECRET": "your_client_secret_here"
+      }
+    },
+    "code-execution-server": {
+      "command": "python",
+      "args": [
+        "/absolute/path/to/your/code_execution_server.py"
+      ]
+    }
+  }
+}
