@@ -36,6 +36,11 @@ class MusicAgentState(TypedDict, total=False):
     
     # 额外信息
     metadata: Dict[str, Any]  # 元数据
+    
+    # 歌单相关（新增）
+    playlist_candidates: List[Dict[str, Any]]  # 歌单候选歌曲
+    playlist_balance_config: Dict[str, Any]  # 平衡配置
+    created_playlist: Optional[Dict[str, Any]]  # 创建的播放列表信息
 
 
 class UserPreferences(TypedDict, total=False):
@@ -60,4 +65,8 @@ class PlaylistInfo(TypedDict, total=False):
     mood_progression: str  # 情绪变化描述
     created_at: str  # 创建时间
     theme: str  # 主题
+    # Spotify 相关字段（新增）
+    id: Optional[str]  # Spotify 播放列表 ID
+    url: Optional[str]  # Spotify 播放列表 URL
+    track_count: Optional[int]  # 歌曲数量
 

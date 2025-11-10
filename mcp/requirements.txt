@@ -1,0 +1,5 @@
+spotipy==2.23.0
+mcp>=1.9.2
+pydantic>=2.8.0
+python-dotenv>=1.0.1,<2
+requests>=2.31.0

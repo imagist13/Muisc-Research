@@ -62,13 +62,16 @@ def setup_environment_from_settings(settings: Optional[Dict[str, Any]] = None) -
         "DASH_SCOPE_API_KEY": "DASH_SCOPE_API_KEY",
         "DASH_SCOPE_BASE_URL": "DASH_SCOPE_BASE_URL",
         "DASH_SCOPE_EMBEDDING_MODEL": "DASH_SCOPE_EMBEDDING_MODEL",
+        "TAILYAPI_API_KEY": "TAILYAPI_API_KEY",
+        "TAILYAPI_BASE_URL": "TAILYAPI_BASE_URL",
+        "SPOTIFY_CLIENT_ID": "SPOTIFY_CLIENT_ID",
+        "SPOTIFY_CLIENT_SECRET": "SPOTIFY_CLIENT_SECRET",
     }
     
     for json_key, env_key in env_mapping.items():
         if json_key in settings and settings[json_key]:
-            # 只有当环境变量未设置时才设置
-            if not os.getenv(env_key):
-                os.environ[env_key] = str(settings[json_key])
+            # 强制设置环境变量（覆盖已存在的值）
+            os.environ[env_key] = str(settings[json_key])
 
 
 def load_and_setup_settings(json_path: Optional[str] = None) -> Dict[str, Any]:

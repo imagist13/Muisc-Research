@@ -7,6 +7,13 @@ import asyncio
 import os
 from typing import Dict, Any, Optional, List
 
+# 在导入其他模块之前加载配置
+try:
+    from config.settings_loader import load_and_setup_settings
+    load_and_setup_settings()
+except Exception as e:
+    print(f"警告: 无法从 setting.json 加载配置: {e}")
+
 from config.logging_config import get_logger
 from graphs.music_graph import MusicRecommendationGraph
 from schemas.music_state import MusicAgentState

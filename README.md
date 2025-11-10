@@ -115,11 +115,7 @@ pip install -r requirements.txt
 python run_music_app.py
 ```
 
-**方式二：直接运行Streamlit**
 
-```bash
-streamlit run music_app.py
-```
 
 启动后访问 http://localhost:8501 即可使用Web界面。
 
