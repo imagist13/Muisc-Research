@@ -518,25 +518,60 @@ class MusicRecommenderEngine:
         try:
             logger.info(f"根据心情推荐音乐: mood='{mood}'")
             
-            # 心情到 Spotify 流派的映射
+            # 心情到 Spotify 流派的映射（扩充中文同义词）
             mood_genre_map = {
                 "开心": ["pop", "dance", "electronic"],
                 "快乐": ["pop", "dance", "electronic"],
-                "悲伤": ["acoustic", "sad", "indie"],
-                "伤心": ["acoustic", "sad", "indie"],
-                "放松": ["chill", "acoustic", "jazz"],
-                "舒缓": ["chill", "acoustic", "jazz"],
-                "激动": ["rock", "electronic", "dance"],
+                "高兴": ["pop", "dance", "electronic"],
                 "兴奋": ["rock", "electronic", "dance"],
-                "怀旧": ["classic", "pop", "rock"],
+                "激动": ["rock", "electronic", "dance"],
+                "悲伤": ["acoustic", "sad", "indie", "mellow"],
+                "伤心": ["acoustic", "sad", "indie", "mellow"],
+                "难过": ["acoustic", "sad", "indie", "piano"],
+                "丧": ["acoustic", "sad", "indie"],
+                "疗愈": ["acoustic", "mellow", "indie"],
+                "放松": ["chill", "acoustic", "jazz", "ambient"],
+                "舒缓": ["chill", "acoustic", "jazz", "ambient"],
                 "平静": ["ambient", "acoustic", "chill"],
-                "浪漫": ["acoustic", "pop", "r-n-b"],
+                "安静": ["ambient", "acoustic", "chill"],
+                "怀旧": ["classic", "pop", "rock", "indie"],
+                "浪漫": ["acoustic", "pop", "r-n-b", "soul"],
+                "甜蜜": ["pop", "r-n-b", "soul"],
+                "表白": ["r-n-b", "soul", "pop"],
+                "学习": ["lo-fi", "chill", "ambient", "acoustic"],
+                "专注": ["lo-fi", "ambient", "acoustic"],
+                "运动": ["electronic", "rock", "dance"],
+            }
+
+            # 心情到音频特征目标（0-1范围，tempo单位 BPM）
+            mood_target_features = {
+                "开心": {"valence": 0.7, "energy": 0.7, "danceability": 0.6, "tempo": 120},
+                "快乐": {"valence": 0.7, "energy": 0.7, "danceability": 0.6, "tempo": 120},
+                "高兴": {"valence": 0.7, "energy": 0.7, "danceability": 0.6, "tempo": 120},
+                "兴奋": {"valence": 0.6, "energy": 0.85, "danceability": 0.7, "tempo": 130},
+                "激动": {"valence": 0.6, "energy": 0.85, "danceability": 0.7, "tempo": 130},
+                "悲伤": {"valence": 0.25, "energy": 0.3, "danceability": 0.3, "tempo": 80},
+                "伤心": {"valence": 0.25, "energy": 0.3, "danceability": 0.3, "tempo": 80},
+                "难过": {"valence": 0.2, "energy": 0.25, "danceability": 0.3, "tempo": 75},
+                "丧": {"valence": 0.2, "energy": 0.25, "danceability": 0.3, "tempo": 75},
+                "疗愈": {"valence": 0.4, "energy": 0.3, "danceability": 0.35, "tempo": 85},
+                "放松": {"valence": 0.5, "energy": 0.35, "danceability": 0.4, "tempo": 90},
+                "舒缓": {"valence": 0.5, "energy": 0.35, "danceability": 0.4, "tempo": 90},
+                "平静": {"valence": 0.45, "energy": 0.25, "danceability": 0.35, "tempo": 80},
+                "安静": {"valence": 0.45, "energy": 0.25, "danceability": 0.35, "tempo": 80},
+                "怀旧": {"valence": 0.5, "energy": 0.45, "danceability": 0.45, "tempo": 100},
+                "浪漫": {"valence": 0.65, "energy": 0.45, "danceability": 0.5, "tempo": 95},
+                "甜蜜": {"valence": 0.7, "energy": 0.5, "danceability": 0.55, "tempo": 100},
+                "表白": {"valence": 0.65, "energy": 0.45, "danceability": 0.5, "tempo": 95},
+                "学习": {"valence": 0.45, "energy": 0.3, "danceability": 0.35, "tempo": 85},
+                "专注": {"valence": 0.4, "energy": 0.25, "danceability": 0.3, "tempo": 80},
+                "运动": {"valence": 0.6, "energy": 0.85, "danceability": 0.75, "tempo": 130},
             }
             
             # 匹配流派
             spotify_genres = []
             for key, value in mood_genre_map.items():
-                if key in mood.lower() or mood.lower() in key:
+                if key in mood or mood in key:
                     spotify_genres.extend(value)
             
             if not spotify_genres:
@@ -552,13 +587,66 @@ class MusicRecommenderEngine:
                 logger.warning(f"Spotify 推荐未返回结果，请检查 MCP 配置")
                 return []
             
+            # 获取音频特征并基于心情做重排
+            try:
+                target = None
+                for k, v in mood_target_features.items():
+                    if k in mood or mood in k:
+                        target = v
+                        break
+                features_by_id = {}
+                if target:
+                    track_ids = [s.spotify_id for s in songs if s.spotify_id]
+                    features_by_id = await self.mcp_adapter.get_audio_features(track_ids)
+
+                    def _score(song: Song) -> float:
+                        feat = features_by_id.get(song.spotify_id or "", {})
+                        if not feat:
+                            # 回退使用流行度
+                            return 0.3 + (song.popularity or 0) / 200.0
+                        # 计算与目标的距离分数（越小越好，这里转为分数越大越好）
+                        w = {"valence": 0.4, "energy": 0.3, "danceability": 0.2, "tempo": 0.1}
+                        score = 0.0
+                        for kf, weight in w.items():
+                            if kf == "tempo":
+                                v = feat.get(kf)
+                                if v is None:
+                                    continue
+                                diff = abs(v - target.get(kf, v)) / 60.0  # 60 BPM 归一
+                            else:
+                                v = feat.get(kf)
+                                if v is None:
+                                    continue
+                                diff = abs(v - target.get(kf, v))
+                            score += weight * max(0.0, 1.0 - diff)
+                        # 结合流行度做轻微加权
+                        score += 0.1 * ((song.popularity or 0) / 100.0)
+                        return score
+
+                    songs = sorted(songs, key=_score, reverse=True)
+            except Exception as e:
+                logger.debug(f"按音频特征重排失败: {e}")
+
+            # 艺人多样性：避免同一艺人重复
+            unique_by_artist = []
+            seen_artists = set()
+            for s in songs:
+                artist_key = (s.artist or "").lower()
+                if artist_key and artist_key in seen_artists:
+                    continue
+                seen_artists.add(artist_key)
+                unique_by_artist.append(s)
+                if len(unique_by_artist) >= limit:
+                    break
+            final_songs = unique_by_artist or songs[:limit]
+
             recommendations = []
-            for song in songs:
+            for song in final_songs:
                 reason = f"这首歌曲很适合你现在的{mood}心情"
                 recommendations.append(MusicRecommendation(
                     song=song,
                     reason=reason,
-                    similarity_score=0.85
+                    similarity_score=0.9
                 ))
             
             logger.info(f"使用 Spotify 推荐生成了 {len(recommendations)} 条推荐")

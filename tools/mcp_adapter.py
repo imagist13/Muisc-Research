@@ -330,7 +330,7 @@ class MCPClientAdapter:
                 user_prompt += f"请推荐 {limit} 首相似风格的音乐，返回JSON数组格式。"
                 
                 # 调用硅基流动API
-                response_text = llm.invoke(system_prompt, user_prompt, temperature=0.8, max_tokens=2000)
+                response_text = llm.invoke(system_prompt, user_prompt, temperature=0.3, max_tokens=2000)
                 
                 # 解析JSON响应
                 import re
@@ -354,6 +354,22 @@ class MCPClientAdapter:
             
             # 使用Spotify搜索API查找推荐的歌曲
             found_songs = []
+            def _build_queries(song_name: str, artist_name: Optional[str]) -> List[str]:
+                # 尝试多种查询以提高命中率（去除标点、添加引号、不同字段组合）
+                import re as _re
+                def _normalize(s: str) -> str:
+                    return _re.sub(r"[\"'“”‘’·.,，。!?！？()\(\)\[\]【】]", " ", s).strip()
+                name_norm = _normalize(song_name)
+                artist_norm = _normalize(artist_name) if artist_name else None
+                queries = []
+                if artist_norm:
+                    queries.append(f'track:"{name_norm}" artist:"{artist_norm}"')
+                    queries.append(f"{name_norm} {artist_norm}")
+                    queries.append(f"track:{name_norm} artist:{artist_norm}")
+                queries.append(f'track:"{name_norm}"')
+                queries.append(name_norm)
+                return queries
+            
             for rec in recommendations_data[:limit * 2]:  # 搜索更多以增加找到的概率
                 try:
                     song_name = rec.get("song") or rec.get("name") or rec.get("title")
@@ -362,24 +378,24 @@ class MCPClientAdapter:
                     if not song_name:
                         continue
                     
-                    # 构建搜索查询
-                    if artist_name:
-                        query = f"track:{song_name} artist:{artist_name}"
-                    else:
-                        query = f"track:{song_name}"
-                    
-                    # 搜索歌曲
-                    search_results = sp.search(q=query, type="track", limit=3)
-                    tracks = search_results.get("tracks", {}).get("items", [])
-                    
-                    if tracks:
-                        # 选择第一个匹配的歌曲
-                        track = tracks[0]
-                        song = self._spotify_track_to_song(track)
-                        # 避免重复
-                        if song.spotify_id not in [s.spotify_id for s in found_songs]:
-                            found_songs.append(song)
-                            logger.debug(f"找到推荐歌曲: {song.name} by {song.artist}")
+                    # 多策略搜索
+                    queries = _build_queries(song_name, artist_name)
+                    matched = False
+                    for q in queries:
+                        search_results = sp.search(q=q, type="track", limit=5)
+                        tracks = search_results.get("tracks", {}).get("items", [])
+                        if tracks:
+                            # 按流行度排序取最优
+                            tracks = sorted(tracks, key=lambda x: x.get("popularity", 0), reverse=True)
+                            for track in tracks:
+                                song = self._spotify_track_to_song(track)
+                                if song.spotify_id and song.spotify_id not in [s.spotify_id for s in found_songs]:
+                                    found_songs.append(song)
+                                    matched = True
+                                    logger.debug(f"找到推荐歌曲: {song.title} by {song.artist}")
+                                    break
+                        if matched:
+                            break
                     
                     if len(found_songs) >= limit:
                         break
@@ -396,6 +412,29 @@ class MCPClientAdapter:
             logger.error(f"获取推荐失败: {error_msg}", exc_info=True)
             return []
     
+    async def get_audio_features(self, track_ids: List[str]) -> Dict[str, Any]:
+        """批量获取 Spotify 音频特征"""
+        try:
+            sp = self._get_spotify_client()
+            if sp is None or not track_ids:
+                return {}
+            features_list = sp.audio_features(tracks=track_ids[:100])
+            features_by_id: Dict[str, Any] = {}
+            for feat in features_list or []:
+                if feat and feat.get("id"):
+                    features_by_id[feat["id"]] = {
+                        "danceability": feat.get("danceability"),
+                        "energy": feat.get("energy"),
+                        "valence": feat.get("valence"),
+                        "tempo": feat.get("tempo"),
+                        "acousticness": feat.get("acousticness"),
+                        "instrumentalness": feat.get("instrumentalness"),
+                    }
+            return features_by_id
+        except Exception as e:
+            logger.debug(f"获取音频特征失败: {e}")
+            return {}
+
     async def get_recommendations_by_names(
         self,
         seed_track_names: Optional[List[Dict[str, str]]] = None,
