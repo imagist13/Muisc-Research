@@ -1,255 +1,217 @@
-# 🎵 音乐推荐Agent
+<p align="center">
+  <img src="assets/logo.png" alt="Music Recommendation Agent logo" width="140">
+</p>
 
-<div align="center">
+<h1 align="center">音乐推荐 Agent</h1>
 
-**一个基于AI的智能音乐推荐系统，提供个性化的音乐推荐服务**
-
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Latest-green.svg)](https://github.com/langchain-ai/langgraph)
-[![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red.svg)](https://streamlit.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-[快速开始](#-安装和配置) • [功能特性](#-功能特性) • [使用示例](#-使用方法) • [项目架构](#-项目架构)
-
-</div>
+<p align="center">
+  用自然语言和 AI 获取个性化音乐推荐。
+</p>
 
 ---
 
-> 🎶 **用自然语言和AI聊音乐，让推荐更懂你**  
-> 基于 LangGraph 构建的智能音乐推荐系统，支持根据心情、场景、流派等多种维度进行个性化推荐。使用硅基流动 API（支持 DeepSeek、Qwen 等模型），提供直观的 Streamlit Web 界面。
+## Highlights
 
-### 🚀 快速体验
+- 🎯 智能理解心情、场景、流派等需求，一键生成推荐歌单
+- 🔍 集成搜索、推荐与解释，让你知道每首歌的推荐理由
+- ⚙️ 基于 LangGraph + Streamlit，轻量部署即可运行
+- 🔐 支持自定义 LLM（DeepSeek、Qwen 等）与本地音乐数据
+
+## 项目概览
+
+音乐推荐 Agent 是一个面向内容创作者与音乐爱好者的 AI 助手。通过自然语言对话即可完成：
+
+- 心情或场景驱动的歌单生成
+- 特定歌手、流派的音乐探索
+- 推荐背后逻辑的透明解释
+- 面向下一步集成的 API 化扩展接口
+
+项目默认使用硅基流动提供的 DeepSeek / Qwen 模型，也可接入其他 OpenAI 风格的 LLM 服务。
+
+
+## Quick Start
+
+### 环境要求
+
+- Python 3.8+
+- pip / uv / poetry 等任意包管理工具
+- 可选：GPU 环境以加速本地推理
+
+### 安装
 
 ```bash
-# 1. 克隆仓库
 git clone <your-repo-url>
 cd deep-search
-
-# 2. 安装依赖
-pip install -r requirements.txt
-
-# 3. 配置 API 密钥（在 setting.json 中）
-# 4. 启动应用
-python run_music_app.py
-```
-
-### 💡 使用示例
-
-- **心情推荐**: "我现在心情很好，推荐一些开心的音乐"
-- **场景推荐**: "适合运动时听的音乐"
-- **搜索歌曲**: "搜索周杰伦的歌曲"
-- **流派推荐**: "推荐一些好听的民谣"
-
-## ✨ 功能特性
-
-- 🎯 **智能推荐**: 根据心情、场景、流派、艺术家等多种方式推荐音乐
-- 🔍 **音乐搜索**: 快速搜索歌曲、艺术家和专辑
-- 💬 **自然对话**: 像朋友一样和用户聊音乐，理解自然语言需求
-- 🎼 **多维度推荐**: 支持心情推荐、场景推荐、相似歌曲推荐等
-- 🔄 **工作流编排**: 基于LangGraph的智能工作流管理
-- 🌐 **Web界面**: 基于Streamlit的直观Web界面
-
-## 📁 项目架构
-
-```
-deep search/
-├── config/                    # 配置管理
-│   └── settings_loader.py    # 配置加载器（从setting.json读取）
-├── llms/                      # LLM集成
-│   ├── base.py               # LLM基类
-│   └── siliconflow_llm.py    # 硅基流动LLM实现
-├── schemas/                   # 数据模型
-│   └── music_state.py        # 音乐状态定义
-├── graphs/                    # 工作流图
-│   └── music_graph.py        # 音乐推荐工作流图
-├── prompts/                   # 提示词
-│   └── music_prompts.py      # 音乐推荐提示词
-├── tools/                     # 工具
-│   └── music_tools.py         # 音乐工具（搜索、推荐引擎）
-├── data/                      # 数据文件
-│   └── music_database.json   # 音乐数据库
-├── music_agent.py            # Agent主入口类
-├── music_app.py              # Streamlit Web界面
-├── run_music_app.py          # 快速启动脚本
-├── setting.json              # 配置文件（API密钥等）
-└── requirements.txt          # 依赖包
-```
-
-## 🚀 安装和配置
-
-### 1. 安装依赖
-
-```bash
 pip install -r requirements.txt
 ```
 
-### 2. 配置文件设置
-
-创建 `setting.json` 文件并配置以下内容：
+### 配置密钥
 
 ```json
 {
-  "SILICONFLOW_API_KEY": "your_siliconflow_api_key_here",
+  "SILICONFLOW_API_KEY": "",
   "SILICONFLOW_BASE_URL": "https://api.siliconflow.cn/v1",
-  "SILICONFLOW_CHAT_MODEL": "deepseek-ai/DeepSeek-V3",
-  "DASH_SCOPE_API_KEY": "your_dashscope_api_key_here",
-  "DASH_SCOPE_BASE_URL": "https://api.deepseek.com",
-  "DASH_SCOPE_EMBEDDING_MODEL": "text-embedding-ada-002",
-  "APP_NAME": "Music Recommendation Agent"
+  "SILICONFLOW_CHAT_MODEL": "Qwen/Qwen2.5-72B-Instruct",
+  "TAILYAPI_API_KEY": "",
+  "TAILYAPI_BASE_URL": "https://api.tavily.com",
+  "APP_NAME": "DeepSearch Quickstart",
+  "SPOTIFY_CLIENT_ID": "",
+  "SPOTIFY_CLIENT_SECRET": ""
 }
 ```
 
-**支持的模型**：
-- `deepseek-ai/DeepSeek-V3` (推荐)
-- `Qwen/Qwen2.5-72B-Instruct`
-- `Qwen/Qwen2.5-32B-Instruct`
-- 其他硅基流动支持的模型
+> 提示：也可通过环境变量 `SILICONFLOW_API_KEY` 等方式配置，无需 `setting.json`。
 
-> 💡 **提示**: 也可以使用环境变量配置，但推荐使用 `setting.json` 文件。
-
-### 3. 运行应用
-
-**方式一：使用快速启动脚本（推荐）**
+### 本地运行
 
 ```bash
 python run_music_app.py
 ```
 
+访问 `http://localhost:8501` 即可体验 Web 界面。  
+如需使用 Streamlit 自带命令，替换为：
+
+```bash
+streamlit run music_app.py
+```
+
+### 快速部署建议
+
+- Docker 化部署：在项目根目录创建 Dockerfile，复制代码并执行 `streamlit run`
+- 云端部署：使用 Streamlit Community Cloud、Railway、Render 等平台，配置环境变量即可上线
+- 内部使用：可在企业 VPN 或内网环境中运行，结合 Nginx/Gunicorn 做反向代理
+
+## 配置说明
+
+- `SILICONFLOW_API_KEY`：硅基流动平台获取的 API Key
+- `SILICONFLOW_BASE_URL`：硅基流动 API 路径，默认为 `https://api.siliconflow.cn/v1`
+- `SILICONFLOW_CHAT_MODEL`：对话模型，例如 `deepseek-ai/DeepSeek-V3`
 
 
-启动后访问 http://localhost:8501 即可使用Web界面。
+如需接入更多第三方服务，只需在 `setting.json` 中新增字段，并在 `config/settings_loader.py` 中读取。
 
-## 📖 使用方法
+## 使用指南
 
-### Web界面使用
+### Web 界面
 
-启动应用后，你可以：
+1. 打开浏览器访问 `http://localhost:8501`
+2. 在“智能推荐”页输入需求（心情、场景、歌手等）
+3. 在“音乐搜索”页按关键字过滤本地音乐库
+4. 查看侧边栏快捷按钮，快速测试预设场景
 
-1. **智能推荐页**：输入你的需求，获取个性化推荐
-   - "我现在心情很好，推荐一些开心的音乐"
-   - "适合运动时听的音乐"
-   - "推荐一些好听的民谣"
-
-2. **音乐搜索页**：搜索特定歌曲或艺术家
-   - "搜索周杰伦的歌曲"
-   - "找一下《晴天》这首歌"
-
-3. **快捷按钮**：使用侧边栏的快捷按钮快速获取推荐
-
-### Python API使用
+### Python API
 
 ```python
 import asyncio
 from music_agent import MusicRecommendationAgent
 
 async def main():
-    # 创建Agent实例
     agent = MusicRecommendationAgent()
-    
-    # 示例1: 智能推荐
-    result = await agent.get_recommendations(
-        "我现在心情很好，推荐一些开心的音乐"
-    )
+
+    result = await agent.get_recommendations("想运动，来点劲爆的")
     print(result["response"])
-    
-    # 示例2: 搜索音乐
+
     search_result = await agent.search_music("周杰伦", genre="流行")
     for song in search_result["results"]:
-        print(f"{song['title']} - {song['artist']}")
-    
-    # 示例3: 根据心情推荐
-    mood_result = await agent.get_recommendations_by_mood("放松")
-    for rec in mood_result["recommendations"]:
-        print(f"{rec['song']['title']}: {rec['reason']}")
+        print(song["title"], song["artist"])
 
 asyncio.run(main())
 ```
 
-### 推荐示例
+### 二次开发建议
 
-**根据心情**：
-- "我现在心情很好，想听点开心的音乐"
-- "推荐一些悲伤的音乐，想听听伤感的歌"
-- "想要放松一下，推荐一些舒缓的音乐"
+- 对接真实音乐 API：扩展 `tools/music_tools.py`，替换本地 JSON 数据源
+- 自定义提示词：修改 `prompts/music_prompts.py` 以调整 AI 语气与输出结构
+- 新增意图类型：在 `schemas/music_state.py` 中添加枚举，在工作流中增加节点
 
-**根据场景**：
-- "适合运动时听的音乐"
-- "推荐一些适合学习的背景音乐"
-- "推荐一些助眠音乐"
+## Screenshots
 
-**搜索和发现**：
-- "搜索周杰伦的歌曲"
-- "推荐一些好听的民谣"
-- "有没有类似《晴天》的歌曲"
+<p align="center">
+  <img src="assets/首页.png" alt="应用首页界面" width="260">
+  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="260">
+  <img src="assets/推荐说明.png" alt="推荐说明界面" width="260">
+</p>
 
-## 🔄 工作流程
+## MCP 工具集
+
+- `mcp/music_server_updated_2025.py`：封装 `search_tracks`、`get_recommendations`、`create_playlist`、`analyze_playlist` 等工具，直接调用 Spotify API（基于 Spotipy）。
+- `mcp/siliconflow_server.py`：可选的 MCP 服务，用于与 SiliconFlow API 协同。
+- `mcp/ARCHITECTURE_DIAGRAM.md`：系统架构示意，展示从 LangGraph 工作流到 MCP 再到 Spotify 的链路。
+- `mcp/csv_to_json.py`、`mcp/analyze_songs.py`：辅助数据处理脚本，可生成/分析本地歌单。
+- `mcp/verify_config.py`、`verify_spotify_config.py`：用于诊断凭证与网络状态。
+
+> 想要单独运行 MCP 服务器，可在 `mcp/` 下安装 `requirements.txt` 后执行 `python music_server_updated_2025.py`，再在主项目中通过 `tools.mcp_adapter` 调用。
+
+## 架构一览
 
 ```
-用户输入
-    ↓
-意图分析 (analyze_intent)
-    ↓
-条件路由 (route_by_intent)
-    ├─→ 搜索歌曲 (search_songs) ──→ 生成解释 (generate_explanation)
-    ├─→ 生成推荐 (generate_recommendations) ──→ 生成解释
-    └─→ 通用聊天 (general_chat)
-    ↓
-返回结果
+用户请求
+  └─▶ 意图识别 (analyze_intent)
+        └─▶ 条件路由 (route_by_intent)
+                ├─▶ search_songs           → 推荐解释
+                ├─▶ generate_recommendations → 推荐解释
+                └─▶ general_chat
+                      ↓
+                  最终响应
 ```
 
-### 意图类型
+- **LangGraph 工作流**：基于有向图节点管理不同任务
+- **音乐工具层**：负责搜索、相似度匹配、心情标签解析
+- **LLM 层**：负责自然语言理解与推荐解释生成
+- **Streamlit 前端**：展示推荐结果、可视化推荐理由
 
-- `search` - 搜索歌曲
-- `recommend_by_mood` - 根据心情推荐
-- `recommend_by_activity` - 根据活动场景推荐
-- `recommend_by_genre` - 根据流派推荐
-- `recommend_by_artist` - 根据艺术家推荐
-- `recommend_by_favorites` - 根据喜欢的歌曲推荐
-- `general_chat` - 通用聊天
+## 技术栈
 
-## 🛠️ 技术栈
+- LangGraph：工作流编排
+- LangChain：LLM 能力封装
+- Streamlit：交互式 Web 界面
+- Pydantic：数据校验与状态管理
+- asyncio：异步调度，提高响应效率
 
-- **LangGraph**: AI工作流编排
-- **LangChain**: LLM应用框架
-- **硅基流动 (SiliconFlow)**: 大语言模型服务（支持DeepSeek、Qwen等）
-- **Streamlit**: Web界面框架
-- **Python**: 后端开发语言
-- **asyncio**: 异步编程
-- **Pydantic**: 数据验证
+## 数据与扩展
 
-## 🎸 支持的音乐流派
+- 示例数据存储在 `data/music_database.json`
+- 音乐条目字段包含标题、艺术家、流派、情绪标签、推荐理由等
+- 未来可对接 Spotify、网易云、Apple Music 等真实数据源
+- 支持嵌入模型，将用户喜好与历史行为写入向量数据库
 
-- 流行 (Pop)
-- 摇滚 (Rock)
-- 民谣 (Folk)
-- 电子 (Electronic)
-- 说唱 (Hip-Hop)
-- 抒情 (Ballad)
-- 古风 (Chinese Ancient Style)
-- 爵士 (Jazz)
+## 测试与验证
 
-## ⚠️ 注意事项
+- `python test_config.py`：确认 `setting.json` 加载成功、环境变量写入正确、SiliconFlow 模型可用。
+- `python test_music_mcp.py`：在配置好 Spotify 凭证后运行，逐项验证搜索、心情/活动推荐与 LangGraph 智能体链路。
+- Streamlit UI 内置系统状态面板，可实时检查 API Key、最近推荐、MCP 运行情况。
 
-1. **API密钥**: 需要有效的硅基流动API密钥（在 `setting.json` 中配置）
-2. **模型选择**: 推荐使用 `deepseek-ai/DeepSeek-V3` 或 `Qwen/Qwen2.5-72B-Instruct`
-3. **音乐数据**: 当前使用本地JSON文件存储音乐数据，位于 `data/music_database.json`
-4. **扩展性**: 可以轻松对接真实音乐API（Spotify、网易云等）
+> 建议在首次部署或更换凭证后先跑通以上脚本，确保外部依赖可用。
 
-## 🔮 未来规划
+## Repository Map
 
-- [ ] 对接真实音乐API（Spotify、网易云等）
-- [ ] 添加在线播放功能
-- [ ] 用户偏好学习和个性化
-- [ ] 歌单生成和管理
-- [ ] 音乐风格深度分析
-- [ ] 推荐算法优化
+```
+deep search/
+├── music_agent.py          # 智能推荐核心
+├── music_app.py            # Streamlit 前端
+├── run_music_app.py        # 启动脚本
+├── config/                 # 配置加载
+├── graphs/                 # LangGraph 工作流
+├── tools/                  # 推荐与搜索工具
+└── data/music_database.json# 示例音乐数据
+```
 
-## 📚 相关文档
+## Roadmap
 
-- [MUSIC_README.md](MUSIC_README.md) - 完整功能文档
-- [MUSIC_QUICKSTART.md](MUSIC_QUICKSTART.md) - 快速开始指南
-- [音乐推荐Agent总览.md](音乐推荐Agent总览.md) - 项目总览
+- [ ] 对接 Spotify / 网易云音乐 API，实现实时乐库
+- [ ] 支持用户登录与偏好记忆
+- [ ] 在线播放 & 歌单分享功能
+- [ ] 推荐算法优化（协同过滤、向量检索）
+- [ ] 多语言界面与推荐说明
 
-## 许可证
+## Contributing
+
+欢迎以 Issue / PR 的形式提交需求或改进建议：
+
+- Fork 本仓库并创建新分支
+- 遵循已有代码风格，尽量补充测试或示例
+- 在 PR 中说明变更背景与验证方式
+
+## License
 
 MIT License
