@@ -56,6 +56,24 @@ class MusicSearchTool:
         self.session = None
         # 模拟音乐数据库（实际项目中应该对接真实的音乐API，如Spotify、网易云等）
         self.music_db = self._initialize_music_db()
+        # 加载 tailyapi 配置
+        self.tailyapi_config = self._load_tailyapi_config()
+    
+    def _load_tailyapi_config(self) -> Dict[str, str]:
+        """加载 tailyapi 配置"""
+        try:
+            from config.settings_loader import load_settings_from_json
+            settings = load_settings_from_json()
+            api_key = settings.get("TAILYAPI_API_KEY") or os.getenv("TAILYAPI_API_KEY", "")
+            base_url = settings.get("TAILYAPI_BASE_URL") or os.getenv("TAILYAPI_BASE_URL", "https://api.tavily.com")
+            
+            return {
+                "api_key": api_key,
+                "base_url": base_url
+            }
+        except Exception as e:
+            logger.warning(f"加载 tailyapi 配置失败: {str(e)}")
+            return {"api_key": "", "base_url": "https://api.tavily.com"}
     
     def _initialize_music_db(self) -> List[Song]:
         """从JSON文件初始化音乐数据库"""
@@ -107,6 +125,158 @@ class MusicSearchTool:
             self.session = aiohttp.ClientSession()
         return self.session
     
+    async def _search_songs_with_tailyapi(
+        self,
+        query: str,
+        limit: int = 10
+    ) -> List[Song]:
+        """
+        使用 tailyapi (Tavily API) 从网上搜索歌曲
+        
+        Args:
+            query: 搜索关键词（歌曲名或艺术家）
+            limit: 返回结果数量
+            
+        Returns:
+            歌曲列表
+        """
+        try:
+            api_key = self.tailyapi_config.get("api_key", "")
+            base_url = self.tailyapi_config.get("base_url", "https://api.tavily.com")
+            
+            if not api_key:
+                logger.warning("TailyAPI API Key 未配置，跳过在线搜索")
+                return []
+            
+            # 构建搜索查询，添加音乐相关关键词
+            search_query = f"{query} 歌曲 音乐 song music"
+            
+            session = await self._get_session()
+            url = f"{base_url}/search"
+            
+            payload = {
+                "api_key": api_key,
+                "query": search_query,
+                "search_depth": "advanced",
+                "include_answer": True,
+                "include_raw_content": False,
+                "max_results": limit * 2,  # 获取更多结果以便筛选
+                "include_domains": [],
+                "exclude_domains": []
+            }
+            
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            logger.info(f"使用 TailyAPI 搜索歌曲: query='{query}'")
+            
+            async with session.post(url, json=payload, headers=headers) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"TailyAPI 请求失败: {response.status} - {error_text}")
+                    return []
+                
+                data = await response.json()
+                
+                # 解析搜索结果
+                songs = []
+                results = data.get("results", [])
+                
+                for result in results[:limit * 2]:
+                    title = result.get("title", "")
+                    content = result.get("content", "")
+                    url_link = result.get("url", "")
+                    
+                    # 尝试从标题和内容中提取歌曲信息
+                    # 这里使用简单的正则或字符串匹配来提取歌曲名和艺术家
+                    song_info = self._extract_song_info_from_text(title + " " + content, query)
+                    
+                    if song_info:
+                        song = Song(
+                            title=song_info.get("title", query),
+                            artist=song_info.get("artist", "未知"),
+                            album=song_info.get("album"),
+                            genre=song_info.get("genre"),
+                            preview_url=url_link,
+                            popularity=song_info.get("popularity", 50)
+                        )
+                        songs.append(song)
+                
+                # 去重（基于标题和艺术家）
+                unique_songs = []
+                seen = set()
+                for song in songs:
+                    key = (song.title.lower(), song.artist.lower())
+                    if key not in seen:
+                        seen.add(key)
+                        unique_songs.append(song)
+                
+                logger.info(f"TailyAPI 搜索到 {len(unique_songs)} 首歌曲")
+                return unique_songs[:limit]
+                
+        except Exception as e:
+            logger.error(f"使用 TailyAPI 搜索歌曲失败: {str(e)}", exc_info=True)
+            return []
+    
+    def _extract_song_info_from_text(self, text: str, query: str) -> Optional[Dict[str, Any]]:
+        """
+        从文本中提取歌曲信息
+        
+        Args:
+            text: 包含歌曲信息的文本
+            query: 原始搜索查询
+            
+        Returns:
+            歌曲信息字典
+        """
+        import re
+        
+        try:
+            # 尝试匹配常见的歌曲信息格式
+            # 例如: "歌曲名 - 艺术家" 或 "艺术家 - 歌曲名"
+            patterns = [
+                r'(.+?)\s*[-–—]\s*(.+)',  # "歌曲 - 艺术家" 或 "艺术家 - 歌曲"
+                r'(.+?)\s*《(.+?)》',  # "艺术家《歌曲》"
+                r'《(.+?)》\s*(.+)',  # "《歌曲》艺术家"
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, text)
+                if match:
+                    groups = match.groups()
+                    if len(groups) >= 2:
+                        # 判断哪个是歌曲名，哪个是艺术家
+                        # 通常查询词更可能是歌曲名
+                        title = groups[0].strip()
+                        artist = groups[1].strip()
+                        
+                        # 如果查询词在第一个位置，可能是 "歌曲 - 艺术家"
+                        if query.lower() in title.lower():
+                            return {
+                                "title": title,
+                                "artist": artist,
+                                "popularity": 60
+                            }
+                        # 否则可能是 "艺术家 - 歌曲"
+                        elif query.lower() in artist.lower():
+                            return {
+                                "title": artist,
+                                "artist": title,
+                                "popularity": 60
+                            }
+            
+            # 如果无法解析，使用查询词作为歌曲名
+            return {
+                "title": query,
+                "artist": "未知",
+                "popularity": 50
+            }
+            
+        except Exception as e:
+            logger.warning(f"提取歌曲信息失败: {str(e)}")
+            return None
+    
     async def search_songs(
         self, 
         query: str, 
@@ -114,7 +284,7 @@ class MusicSearchTool:
         limit: int = 10
     ) -> List[Song]:
         """
-        搜索歌曲
+        搜索歌曲（优先使用 tailyapi，失败则回退到本地数据库）
         
         Args:
             query: 搜索关键词（歌曲名或艺术家）
@@ -127,7 +297,24 @@ class MusicSearchTool:
         try:
             logger.info(f"搜索音乐: query='{query}', genre='{genre}', limit={limit}")
             
-            # 在模拟数据库中搜索
+            # 优先使用 tailyapi 在线搜索
+            online_results = await self._search_songs_with_tailyapi(query, limit=limit * 2)
+            
+            if online_results:
+                # 如果指定了流派，进行过滤
+                if genre:
+                    filtered = [
+                        song for song in online_results
+                        if song.genre and genre.lower() in song.genre.lower()
+                    ]
+                    if filtered:
+                        return filtered[:limit]
+                
+                logger.info(f"从 TailyAPI 找到 {len(online_results)} 首歌曲")
+                return online_results[:limit]
+            
+            # 如果在线搜索失败，回退到本地数据库
+            logger.info("TailyAPI 搜索无结果，使用本地数据库搜索")
             results = []
             query_lower = query.lower()
             
@@ -144,7 +331,7 @@ class MusicSearchTool:
             # 按流行度排序
             results.sort(key=lambda x: x.popularity or 0, reverse=True)
             
-            logger.info(f"找到 {len(results)} 首歌曲")
+            logger.info(f"从本地数据库找到 {len(results)} 首歌曲")
             return results[:limit]
             
         except Exception as e:

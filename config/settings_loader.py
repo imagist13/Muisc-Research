@@ -62,6 +62,8 @@ def setup_environment_from_settings(settings: Optional[Dict[str, Any]] = None) -
         "DASH_SCOPE_API_KEY": "DASH_SCOPE_API_KEY",
         "DASH_SCOPE_BASE_URL": "DASH_SCOPE_BASE_URL",
         "DASH_SCOPE_EMBEDDING_MODEL": "DASH_SCOPE_EMBEDDING_MODEL",
+        "TAILYAPI_API_KEY": "TAILYAPI_API_KEY",
+        "TAILYAPI_BASE_URL": "TAILYAPI_BASE_URL",
     }
     
     for json_key, env_key in env_mapping.items():
