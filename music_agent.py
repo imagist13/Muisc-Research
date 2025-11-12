@@ -17,6 +17,7 @@ except Exception as e:
 from config.logging_config import get_logger
 from graphs.music_graph import MusicRecommendationGraph
 from schemas.music_state import MusicAgentState
+from services import PlaylistRecommendationService
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,7 @@ class MusicRecommendationAgent:
         """初始化智能体"""
         self.graph = MusicRecommendationGraph()
         self.app = self.graph.get_app()
+        self.playlist_service = PlaylistRecommendationService()
         logger.info("MusicRecommendationAgent 初始化完成")
     
     async def get_recommendations(
@@ -249,6 +251,52 @@ class MusicRecommendationAgent:
                 "error": str(e),
                 "similar_songs": [],
                 "count": 0
+            }
+
+    async def generate_smart_playlist(
+        self,
+        query: str,
+        user_preferences: Optional[Dict[str, Any]] = None,
+        target_size: int = 30,
+        create_spotify_playlist: bool = True,
+        public: bool = False
+    ) -> Dict[str, Any]:
+        """
+        调用歌单推荐服务生成智能歌单
+
+        Args:
+            query: 用户的歌单需求描述
+            user_preferences: 用户偏好数据
+            target_size: 歌单目标歌曲数量
+            create_spotify_playlist: 是否同步创建 Spotify 歌单
+            public: 创建的歌单是否公开
+
+        Returns:
+            包含歌单曲目和 Spotify 播放列表信息的字典
+        """
+        try:
+            result = await self.playlist_service.generate_smart_playlist(
+                user_query=query,
+                user_preferences=user_preferences or {},
+                target_size=target_size,
+                create_spotify_playlist=create_spotify_playlist,
+                public=public
+            )
+
+            return {
+                "success": True,
+                **result
+            }
+
+        except Exception as e:
+            logger.error(f"生成智能歌单失败: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "songs": [],
+                "playlist": None,
+                "context": {},
+                "seed_summary": {}
             }
     
     def get_status(self) -> Dict[str, Any]:

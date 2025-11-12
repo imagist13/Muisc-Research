@@ -108,6 +108,7 @@ def _init_agent() -> None:
     st.session_state.setdefault("chat_history", [])
     st.session_state.setdefault("last_result", None)
     st.session_state.setdefault("favorite_songs", [])
+    st.session_state.setdefault("playlist_result", None)
 
 
 def _run_agent(query: str) -> Dict[str, Any]:
@@ -129,6 +130,92 @@ def _run_agent(query: str) -> Dict[str, Any]:
         st.session_state.chat_history = chat_history
     
     return result
+
+
+def _collect_user_preferences() -> Dict[str, Any]:
+    """收集用于歌单生成的用户偏好"""
+    preferences: Dict[str, Any] = {}
+    favorites = st.session_state.get("favorite_songs", [])
+    if favorites:
+        preferences["favorite_songs"] = favorites
+    # 预留扩展位，如果后续支持更多偏好可从 session 中读取
+    return preferences
+
+
+def _generate_playlist(
+    query: str,
+    target_size: int,
+    create_spotify_playlist: bool,
+    public: bool
+) -> Dict[str, Any]:
+    """调用歌单服务"""
+    agent: MusicRecommendationAgent | None = st.session_state.get("music_agent")
+    if agent is None:
+        raise RuntimeError(st.session_state.get("agent_error") or "智能体未正确初始化。")
+
+    user_preferences = _collect_user_preferences()
+    return asyncio.run(agent.generate_smart_playlist(
+        query=query,
+        user_preferences=user_preferences,
+        target_size=target_size,
+        create_spotify_playlist=create_spotify_playlist,
+        public=public
+    ))
+
+
+def _render_playlist_result(result: Dict[str, Any]) -> None:
+    """渲染歌单生成结果"""
+    if not result:
+        st.info("提交需求后即可生成专属歌单。")
+        return
+
+    if not result.get("success", False):
+        st.error(f"❌ 歌单生成失败：{result.get('error', '未知错误')}")
+        return
+
+    playlist_meta = result.get("playlist")
+    if playlist_meta:
+        st.success(
+            f"🎧 Spotify 歌单已创建：[{playlist_meta.get('name', '查看歌单')}]({playlist_meta.get('url', '#')}) "
+            f"(共 {playlist_meta.get('track_count', 0)} 首歌曲)"
+        )
+    else:
+        st.info("歌单曲目已生成，如需同步到 Spotify，可勾选创建选项。")
+
+    context = result.get("context", {})
+    if context.get("moods") or context.get("activities"):
+        tags = []
+        if context.get("moods"):
+            tags.append("心情：" + "、".join(context["moods"]))
+        if context.get("activities"):
+            tags.append("场景：" + "、".join(context["activities"]))
+        if tags:
+            st.caption(" · ".join(tags))
+
+    songs = result.get("songs", [])
+    if songs:
+        st.subheader(f"🎵 歌单曲目（共 {len(songs)} 首）")
+        for i, song in enumerate(songs, 1):
+            title = song.get("title", "未知")
+            artist = song.get("artist", "未知")
+            with st.expander(f"{i}. {title} - {artist}", expanded=(i <= 3)):
+                _format_song_card(song)
+    else:
+        st.warning("未生成任何歌曲，请尝试调整需求描述。")
+
+    seed_summary = result.get("seed_summary") or {}
+    if seed_summary:
+        with st.expander("生成依据"):
+            if seed_summary.get("tracks"):
+                st.markdown("**参考歌曲**")
+                for item in seed_summary["tracks"]:
+                    st.write(f"- {item.get('song_name', '')} — {item.get('artist_name', '')}")
+            if seed_summary.get("artists"):
+                st.markdown("**参考艺术家**")
+                st.write(", ".join(seed_summary["artists"]))
+            if seed_summary.get("genres"):
+                st.markdown("**参考流派**")
+                st.write(", ".join(seed_summary["genres"]))
 
 
 def _sidebar() -> None:
@@ -233,7 +320,7 @@ def main() -> None:
         st.stop()
     
     # 主要交互区域
-    tab1, tab2, tab3 = st.tabs(["💬 智能推荐", "🔍 音乐搜索", "ℹ️ 关于"])
+    tab1, tab2, tab3, tab4 = st.tabs(["💬 智能推荐", "🔍 音乐搜索", "🎧 智能歌单", "ℹ️ 关于"])
     
     with tab1:
         st.subheader("告诉我你想听什么")
@@ -352,6 +439,44 @@ def main() -> None:
                     st.error(f"搜索时发生错误：{exc}")
     
     with tab3:
+        st.subheader("生成专属智能歌单")
+        st.caption("描述你想要的氛围或场景，系统会结合 Spotify 推荐生成一份个性化歌单。")
+
+        with st.form("playlist-form"):
+            playlist_query = st.text_area(
+                "描述你的歌单需求",
+                height=120,
+                placeholder="例如：\n- 想要一份适合早晨通勤的活力歌单\n- 喜欢民谣和独立音乐，想听一些新歌\n- 根据我常听的歌曲生成一份浪漫约会歌单"
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                target_size = st.slider("歌单曲目数量", min_value=10, max_value=50, value=20, step=5)
+            with col2:
+                create_spotify_playlist = st.checkbox("在 Spotify 中创建歌单", value=False)
+                make_public = st.checkbox("将歌单设为公开", value=False, disabled=not create_spotify_playlist)
+
+            submitted_playlist = st.form_submit_button("🎧 生成歌单", type="primary", use_container_width=True)
+
+        if submitted_playlist and playlist_query.strip():
+            with st.spinner("正在生成歌单，请稍候..."):
+                try:
+                    result = _generate_playlist(
+                        query=playlist_query.strip(),
+                        target_size=target_size,
+                        create_spotify_playlist=create_spotify_playlist,
+                        public=bool(make_public and create_spotify_playlist)
+                    )
+                    st.session_state.playlist_result = result
+                except Exception as exc:
+                    st.session_state.playlist_result = {
+                        "success": False,
+                        "error": str(exc)
+                    }
+                    st.error(f"生成歌单时发生错误：{exc}")
+
+        _render_playlist_result(st.session_state.get("playlist_result"))
+
+    with tab4:
         st.subheader("关于音乐推荐助手")
         
         st.markdown("""
