@@ -5,7 +5,7 @@ import MainLayout from '@/components/Layout/MainLayout';
 import WelcomeScreen from '@/components/Content/WelcomeScreen';
 import ThinkingIndicator from '@/components/Content/ThinkingIndicator';
 import ResultsDisplay from '@/components/Content/ResultsDisplay';
-import { searchMusic } from '@/lib/api';
+import { getMockSearchResults, mockDelay } from '@/lib/mockData';
 
 export default function SearchPage() {
   const [loading, setLoading] = useState(false);
@@ -16,13 +16,17 @@ export default function SearchPage() {
     setResults([]);
 
     try {
+      // 模拟API延迟
+      await mockDelay(1200);
+      
       // 简单解析：如果包含"流派"或"genre"，尝试提取
       const parts = value.split(/流派|genre/i);
       const query = parts[0].trim();
       const genre = parts[1]?.trim() || undefined;
 
-      const response = await searchMusic(query, genre);
-      setResults(response.results || []);
+      // 使用模拟数据
+      const mockData = getMockSearchResults(query, genre);
+      setResults(mockData.results || []);
     } catch (error) {
       console.error(error);
       setResults([]);

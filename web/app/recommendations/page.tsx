@@ -5,7 +5,7 @@ import MainLayout from '@/components/Layout/MainLayout';
 import WelcomeScreen from '@/components/Content/WelcomeScreen';
 import ThinkingIndicator from '@/components/Content/ThinkingIndicator';
 import ResultsDisplay from '@/components/Content/ResultsDisplay';
-import { getRecommendations } from '@/lib/api';
+import { getMockRecommendations, mockDelay } from '@/lib/mockData';
 
 export default function RecommendationsPage() {
   const [loading, setLoading] = useState(false);
@@ -16,10 +16,14 @@ export default function RecommendationsPage() {
     setResult(null);
 
     try {
-      const response = await getRecommendations({ query: value });
+      // 模拟API延迟
+      await mockDelay(1500);
+      
+      // 使用模拟数据
+      const mockData = getMockRecommendations(value);
       setResult({
-        response: response.response,
-        recommendations: response.recommendations,
+        response: mockData.response,
+        recommendations: mockData.recommendations,
       });
     } catch (error) {
       setResult({
