@@ -5,9 +5,8 @@ import MainLayout from '@/components/Layout/MainLayout';
 import WelcomeScreen from '@/components/Content/WelcomeScreen';
 import ThinkingIndicator from '@/components/Content/ThinkingIndicator';
 import ResultsDisplay from '@/components/Content/ResultsDisplay';
-import { getRecommendations } from '@/lib/api';
 
-export default function RecommendationsPage() {
+export default function PlaylistPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ response?: string; recommendations?: any[] } | null>(null);
 
@@ -16,14 +15,15 @@ export default function RecommendationsPage() {
     setResult(null);
 
     try {
-      const response = await getRecommendations({ query: value });
+      // TODO: 实现歌单创作 API 调用
+      // 暂时模拟响应
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       setResult({
-        response: response.response,
-        recommendations: response.recommendations,
+        response: `已为你创建歌单：${value}\n\n这个功能正在开发中，敬请期待！`,
       });
     } catch (error) {
       setResult({
-        response: '获取推荐失败，请稍后重试',
+        response: '创建歌单失败，请稍后重试',
       });
       console.error(error);
     } finally {
@@ -34,7 +34,7 @@ export default function RecommendationsPage() {
   return (
     <MainLayout
       onInputSubmit={handleSubmit}
-      inputPlaceholder="例如：想运动，来点劲爆的"
+      inputPlaceholder="例如：创建一个适合运动的歌单"
       inputDisabled={loading}
     >
       {!result && !loading && <WelcomeScreen />}
