@@ -154,24 +154,6 @@ npm run dev
 
 如需接入更多第三方服务，只需在 `setting.json` 中新增字段，并在 `config/settings_loader.py` 中读取。
 
-## 使用指南
-
-### Web 界面
-
-1. 打开浏览器访问 `http://localhost:8501`
-2. 在“智能推荐”页输入需求（心情、场景、歌手等）
-<p align="center">
-  <img src="assets/首页.png" alt="应用首页界面" width="800">
-</p>
-3. 在“音乐搜索”页按关键字过滤本地音乐库
-<p align="center">
-  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="800">
-</p>
-4. 查看侧边栏快捷按钮，快速测试预设场景
-<p align="center">
-  <img src="assets/推荐说明.png" alt="推荐说明界面" width="800">
-</p>
-
 ## MCP 工具集
 
 - `mcp/music_server_updated_2025.py`：封装 `search_tracks`、`get_recommendations`、`create_playlist`、`analyze_playlist` 等工具，直接调用 Spotify API（基于 Spotipy）。
