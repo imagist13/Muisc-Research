@@ -2,7 +2,11 @@
 
 import { theme } from '@/styles/theme';
 
-export default function ThinkingIndicator() {
+interface ThinkingIndicatorProps {
+  message?: string;
+}
+
+export default function ThinkingIndicator({ message }: ThinkingIndicatorProps) {
   return (
     <div
       style={{
@@ -27,7 +31,7 @@ export default function ThinkingIndicator() {
           fontSize: '0.875rem',
         }}
       >
-        思考与网络搜索
+        {message || '思考与网络搜索'}
       </span>
       <div
         style={{

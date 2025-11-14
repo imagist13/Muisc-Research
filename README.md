@@ -14,6 +14,8 @@
 
 - 🎯 智能理解心情、场景、流派等需求，一键生成推荐歌单
 - 🔍 集成搜索、推荐与解释，让你知道每首歌的推荐理由
+- ⚡ **SSE流式输出**：实时流式渲染推荐结果，提供更好的用户体验
+- 🌐 **前后端分离**：FastAPI后端 + Next.js前端，现代化架构
 - ⚙️ 基于 LangGraph + Streamlit，轻量部署即可运行
 - 🔐 支持自定义 LLM（DeepSeek、Qwen 等）与本地音乐数据
 
@@ -24,9 +26,18 @@
 - 心情或场景驱动的歌单生成
 - 特定歌手、流派的音乐探索
 - 推荐背后逻辑的透明解释
+- **实时流式输出**：推荐结果逐词显示，歌曲逐个添加
+- **RESTful API**：提供完整的API接口，支持前后端分离
 - 面向下一步集成的 API 化扩展接口
 
 项目默认使用硅基流动提供的 DeepSeek / Qwen 模型，也可接入其他 OpenAI 风格的 LLM 服务。
+
+### 架构特点
+
+- **后端**：FastAPI + LangGraph，支持SSE流式输出
+- **前端**：Next.js + React，现代化UI体验
+- **数据流**：SSE（Server-Sent Events）实现实时流式渲染
+- **代理层**：Next.js API路由作为SSE代理，简化前后端通信
 
 
 ## Quick Start
@@ -64,6 +75,8 @@ pip install -r requirements.txt
 
 ### 本地运行
 
+#### 方式1：使用Streamlit界面（传统方式）
+
 ```bash
 python run_music_app.py
 ```
@@ -75,11 +88,43 @@ python run_music_app.py
 streamlit run music_app.py
 ```
 
+#### 方式2：使用FastAPI + Next.js（推荐，支持流式输出）
+
+**启动后端API服务器：**
+
+```bash
+# 方式1：使用便捷脚本（推荐）
+python run_api_server.py
+
+# 方式2：使用启动脚本
+python api/start_server.py
+```
+
+后端将在 `http://localhost:8501` 启动，API文档：`http://localhost:8501/docs`
+
+**启动前端：**
+
+```bash
+cd web
+npm install  # 首次运行需要安装依赖
+npm run dev
+```
+
+前端将在 `http://localhost:3000` 启动
+
+访问 `http://localhost:3000/recommendations` 体验流式推荐功能。
+
+> 💡 **提示**：确保设置了 `SILICONFLOW_API_KEY` 环境变量或在 `setting.json` 中配置。
+
 ### 快速部署建议
 
-- Docker 化部署：在项目根目录创建 Dockerfile，复制代码并执行 `streamlit run`
-- 云端部署：使用 Streamlit Community Cloud、Railway、Render 等平台，配置环境变量即可上线
-- 内部使用：可在企业 VPN 或内网环境中运行，结合 Nginx/Gunicorn 做反向代理
+- **Docker 化部署**：在项目根目录创建 Dockerfile，复制代码并执行 `streamlit run` 或 `uvicorn api.server:app`
+- **云端部署**：
+  - Streamlit界面：使用 Streamlit Community Cloud、Railway、Render 等平台
+  - API服务器：使用 Railway、Render、Fly.io 等支持Python的平台
+  - 前端：使用 Vercel、Netlify 等平台部署Next.js应用
+- **内部使用**：可在企业 VPN 或内网环境中运行，结合 Nginx 做反向代理
+- **生产环境**：建议使用 Gunicorn + Uvicorn workers 运行FastAPI，使用Nginx处理SSE连接
 
 ## 配置说明
 
@@ -96,40 +141,16 @@ streamlit run music_app.py
 
 1. 打开浏览器访问 `http://localhost:8501`
 2. 在“智能推荐”页输入需求（心情、场景、歌手等）
-3. 在“音乐搜索”页按关键字过滤本地音乐库
-4. 查看侧边栏快捷按钮，快速测试预设场景
-
-### Python API
-
-```python
-import asyncio
-from music_agent import MusicRecommendationAgent
-
-async def main():
-    agent = MusicRecommendationAgent()
-
-    result = await agent.get_recommendations("想运动，来点劲爆的")
-    print(result["response"])
-
-    search_result = await agent.search_music("周杰伦", genre="流行")
-    for song in search_result["results"]:
-        print(song["title"], song["artist"])
-
-asyncio.run(main())
-```
-
-### 二次开发建议
-
-- 对接真实音乐 API：扩展 `tools/music_tools.py`，替换本地 JSON 数据源
-- 自定义提示词：修改 `prompts/music_prompts.py` 以调整 AI 语气与输出结构
-- 新增意图类型：在 `schemas/music_state.py` 中添加枚举，在工作流中增加节点
-
-## Screenshots
-
 <p align="center">
-  <img src="assets/首页.png" alt="应用首页界面" width="260">
-  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="260">
-  <img src="assets/推荐说明.png" alt="推荐说明界面" width="260">
+  <img src="assets/首页.png" alt="应用首页界面" width="400">
+</p>
+3. 在“音乐搜索”页按关键字过滤本地音乐库
+<p align="center">
+  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="400">
+</p>
+4. 查看侧边栏快捷按钮，快速测试预设场景
+<p align="center">
+  <img src="assets/推荐说明.png" alt="推荐说明界面" width="400">
 </p>
 
 ## MCP 工具集
@@ -144,6 +165,8 @@ asyncio.run(main())
 
 ## 架构一览
 
+### 工作流架构
+
 ```
 用户请求
   └─▶ 意图识别 (analyze_intent)
@@ -155,18 +178,51 @@ asyncio.run(main())
                   最终响应
 ```
 
+### 前后端数据流架构（SSE）
+
+```
+┌─────────────┐         ┌──────────────┐         ┌─────────────┐
+│  前端组件   │ ──────> │ Next.js API   │ ──────> │ FastAPI     │
+│ (React)     │         │ Route (代理)  │         │ Server      │
+└─────────────┘         └──────────────┘         └─────────────┘
+     ▲                        │                        │
+     │                        │                        ▼
+     │                        │                 ┌─────────────┐
+     │                        │                 │ Music Agent │
+     │                        │                 │ & Services  │
+     │                        │                 └─────────────┘
+     │                        │                        │
+     └────────────────────────┴────────────────────────┘
+                    SSE Stream (流式数据)
+```
+
+### 核心组件
+
 - **LangGraph 工作流**：基于有向图节点管理不同任务
 - **音乐工具层**：负责搜索、相似度匹配、心情标签解析
 - **LLM 层**：负责自然语言理解与推荐解释生成
-- **Streamlit 前端**：展示推荐结果、可视化推荐理由
+- **FastAPI 后端**：提供RESTful API和SSE流式接口
+- **Next.js 前端**：现代化UI，支持实时流式渲染
+- **Streamlit 前端**（可选）：传统Web界面，展示推荐结果、可视化推荐理由
 
 ## 技术栈
 
-- LangGraph：工作流编排
-- LangChain：LLM 能力封装
-- Streamlit：交互式 Web 界面
-- Pydantic：数据校验与状态管理
-- asyncio：异步调度，提高响应效率
+### 后端
+- **FastAPI**：现代化Python Web框架，支持SSE流式输出
+- **LangGraph**：工作流编排
+- **LangChain**：LLM 能力封装
+- **Uvicorn**：ASGI服务器
+- **Pydantic**：数据校验与状态管理
+- **asyncio**：异步调度，提高响应效率
+
+### 前端
+- **Next.js 14**：React框架，支持App Router
+- **TypeScript**：类型安全
+- **React Hooks**：状态管理
+- **Fetch API**：SSE流式数据处理
+
+### 可选界面
+- **Streamlit**：快速原型和传统Web界面
 
 ## 数据与扩展
 
@@ -187,22 +243,65 @@ asyncio.run(main())
 
 ```
 deep search/
+├── api/                    # FastAPI后端服务器
+│   ├── server.py          # API服务器主文件
+│   ├── start_server.py    # 启动脚本
+│   └── README.md          # API文档
+├── web/                    # Next.js前端应用
+│   ├── app/               # Next.js App Router
+│   │   ├── api/           # API路由（SSE代理）
+│   │   ├── recommendations/ # 推荐页面
+│   │   └── ...
+│   ├── components/        # React组件
+│   └── lib/               # 工具函数（API客户端）
 ├── music_agent.py          # 智能推荐核心
 ├── music_app.py            # Streamlit 前端
-├── run_music_app.py        # 启动脚本
+├── run_music_app.py        # Streamlit启动脚本
+├── run_api_server.py       # API服务器启动脚本
 ├── config/                 # 配置加载
 ├── graphs/                 # LangGraph 工作流
+├── services/               # 服务层（歌单推荐等）
 ├── tools/                  # 推荐与搜索工具
-└── data/music_database.json# 示例音乐数据
+├── data/music_database.json# 示例音乐数据
+├── SSE_DATAFLOW.md        # SSE数据流设计文档
+└── QUICKSTART.md           # 快速启动指南
 ```
+
+## 新功能：SSE流式数据流
+
+### 特性
+
+- ✅ **实时流式输出**：响应文本逐词显示，提供打字机效果
+- ✅ **状态实时更新**：思考、处理中、完成等状态实时反馈
+- ✅ **歌曲逐个添加**：推荐歌曲逐个添加到列表，提升用户体验
+- ✅ **错误处理**：完善的错误处理和连接管理
+- ✅ **可取消请求**：支持随时取消正在进行的请求
+
+### 使用示例
+
+访问 `http://localhost:3000/recommendations`，输入查询后即可看到：
+1. 思考指示器显示当前处理状态
+2. 响应文本逐词流式显示
+3. 推荐歌曲逐个添加到列表
+
+### 相关文档
+
+- `SSE_DATAFLOW.md` - 详细的数据流设计文档
+- `api/README.md` - API服务器使用文档
+- `QUICKSTART.md` - 快速启动指南
 
 ## Roadmap
 
-- [ ] 对接 Spotify / 网易云音乐 API，实现实时乐库
+- [x] SSE流式输出支持
+- [x] FastAPI后端API
+- [x] Next.js前端界面
+- [√] 对接 Spotify / 网易云音乐 API，实现实时乐库
 - [ ] 支持用户登录与偏好记忆
 - [ ] 在线播放 & 歌单分享功能
 - [ ] 推荐算法优化（协同过滤、向量检索）
 - [ ] 多语言界面与推荐说明
+- [ ] WebSocket支持（双向通信）
+- [ ] 推荐进度条显示
 
 ## Contributing
 
