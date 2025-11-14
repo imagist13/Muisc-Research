@@ -40,6 +40,25 @@
 - **代理层**：Next.js API路由作为SSE代理，简化前后端通信
 
 
+## 使用指南
+
+### Web 界面
+
+1. 打开浏览器访问 `http://localhost:8501`
+2. 在“智能推荐”页输入需求（心情、场景、歌手等）
+<p align="center">
+  <img src="assets/首页.png" alt="应用首页界面" width="800">
+</p>
+3. 在“音乐搜索”页按关键字过滤本地音乐库
+<p align="center">
+  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="800">
+</p>
+4. 查看侧边栏快捷按钮，快速测试预设场景
+<p align="center">
+  <img src="assets/推荐说明.png" alt="推荐说明界面" width="800">
+</p>
+
+
 ## Quick Start
 
 ### 环境要求
@@ -142,15 +161,15 @@ npm run dev
 1. 打开浏览器访问 `http://localhost:8501`
 2. 在“智能推荐”页输入需求（心情、场景、歌手等）
 <p align="center">
-  <img src="assets/首页.png" alt="应用首页界面" width="400">
+  <img src="assets/首页.png" alt="应用首页界面" width="800">
 </p>
 3. 在“音乐搜索”页按关键字过滤本地音乐库
 <p align="center">
-  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="400">
+  <img src="assets/搜素音乐.png" alt="搜索音乐界面" width="800">
 </p>
 4. 查看侧边栏快捷按钮，快速测试预设场景
 <p align="center">
-  <img src="assets/推荐说明.png" alt="推荐说明界面" width="400">
+  <img src="assets/推荐说明.png" alt="推荐说明界面" width="800">
 </p>
 
 ## MCP 工具集
